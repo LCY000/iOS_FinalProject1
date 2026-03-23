@@ -1,0 +1,140 @@
+//
+//  GameEngine.swift
+//  Final Project
+//
+//  Core protocol that all games must conform to.
+//  The lobby, room, and networking layers only talk to this protocol.
+//
+
+import SwiftUI
+
+// MARK: - Player Color
+
+enum PlayerColor: String, Codable {
+    case black
+    case white
+
+    var opposite: PlayerColor {
+        switch self {
+        case .black: return .white
+        case .white: return .black
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .black: return "黑方"
+        case .white: return "白方"
+        }
+    }
+}
+
+// MARK: - Message Envelope (game-agnostic networking)
+
+enum MessageType: String, Codable {
+    case startGame
+    case playerMove
+    case setRules
+    case gameOver
+    case chat
+}
+
+struct MessageEnvelope: Codable {
+    let type: MessageType
+    let gameType: String?   // e.g., "reversi", "gomoku"; nil for system-level messages
+    let payload: Data       // game-specific JSON encoded data
+
+    func encode() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
+
+    static func decode(from data: Data) -> MessageEnvelope? {
+        try? JSONDecoder().decode(MessageEnvelope.self, from: data)
+    }
+}
+
+// MARK: - Move Message (common payload for board games)
+
+struct MoveMessage: Codable {
+    let row: Int
+    let col: Int
+
+    func toData() -> Data {
+        try! JSONEncoder().encode(self)
+    }
+
+    static func fromData(_ data: Data) -> MoveMessage? {
+        try? JSONDecoder().decode(MoveMessage.self, from: data)
+    }
+}
+
+// MARK: - Chat Message
+
+struct ChatMessage: Codable, Identifiable {
+    let id: UUID
+    let text: String
+    let isFromMe: Bool
+    let timestamp: Date
+
+    init(text: String, isFromMe: Bool) {
+        self.id = UUID()
+        self.text = text
+        self.isFromMe = isFromMe
+        self.timestamp = Date()
+    }
+
+    func toData() -> Data {
+        try! JSONEncoder().encode(self)
+    }
+
+    static func fromData(_ data: Data) -> ChatMessage? {
+        try? JSONDecoder().decode(ChatMessage.self, from: data)
+    }
+}
+
+// MARK: - Game Engine Protocol
+
+/// All games must conform to this protocol to plug into the platform.
+/// The Core layer (Lobby, Room, MultipeerManager) only interacts through this interface.
+protocol GameEngine: AnyObject, Observable {
+    // MARK: Identity
+    static var gameTitle: String { get }
+    static var gameIcon: String { get }  // SF Symbol name
+    static var gameType: String { get }  // unique identifier, e.g. "reversi"
+
+    // MARK: State
+    var currentPlayer: PlayerColor { get }
+    var scores: (black: Int, white: Int) { get }
+    var isGameOver: Bool { get }
+    var statusMessage: String { get }
+    var boardSize: Int { get }
+
+    // MARK: Multiplayer
+    var isMultiplayer: Bool { get set }
+    var localPlayer: PlayerColor { get set }
+
+    // MARK: Move Confirmation
+    var pendingMove: (row: Int, col: Int)? { get }
+    func confirmMove()
+    func cancelMove()
+
+    // MARK: Actions
+    func handleTap(row: Int, col: Int) -> Bool
+    func receiveRemoteMove(data: Data)
+    func reset()
+
+    // MARK: Settings
+    /// Each game provides its own settings UI (shown in Room before game starts).
+    @ViewBuilder func makeSettingsView() -> AnyView
+    /// Export current settings as Data to send to peer via .setRules envelope.
+    func exportSettings() -> Data
+    /// Apply settings received from peer.
+    func applySettings(data: Data)
+
+    // MARK: Network Hook
+    /// Set by the Room/networking layer. Called when a move needs to be sent to the peer.
+    var onMoveToSend: ((MessageEnvelope) -> Void)? { get set }
+
+    // MARK: View Factory
+    @ViewBuilder func makeGameView() -> AnyView
+}

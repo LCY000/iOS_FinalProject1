@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>此 App 需要使用本地網路來進行近距離對戰</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_game-platform._tcp</string>
+    </array>
+</dict>
+</plist>

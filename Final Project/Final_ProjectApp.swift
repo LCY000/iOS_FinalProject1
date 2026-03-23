@@ -9,9 +9,16 @@ import SwiftUI
 
 @main
 struct Final_ProjectApp: App {
+    init() {
+        print("🟢 [App] Final_ProjectApp init")
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    print("🟢 [App] ContentView appeared")
+                }
         }
     }
 }
