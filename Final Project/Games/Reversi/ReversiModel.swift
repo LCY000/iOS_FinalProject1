@@ -50,6 +50,10 @@ struct ReversiModel {
     /// Whose turn it is
     var currentPlayer: PlayerColor
 
+    /// The (row, col) of the most recently placed piece; used by the UI to
+    /// highlight the opponent's last move. Nil at game start and after reset.
+    var lastMove: (row: Int, col: Int)?
+
     /// All 8 directions: (row delta, col delta)
     private static let directions: [(Int, Int)] = [
         (-1, -1), (-1, 0), (-1, 1),
@@ -121,6 +125,8 @@ struct ReversiModel {
         for (r, c) in flips {
             board[r][c] = CellState.from(currentPlayer)
         }
+
+        lastMove = (row, col)
 
         // Switch turn
         currentPlayer = currentPlayer.opposite

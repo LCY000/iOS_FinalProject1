@@ -8,13 +8,44 @@
 
 import Foundation
 
+// MARK: - Forbidden Rule Target
+
+enum ForbiddenTarget: String, Codable, CaseIterable {
+    case blackOnly = "僅黑方"
+    case both = "雙方"
+}
+
 // MARK: - Gomoku Rules
 
 struct GomokuRules: Codable {
     var boardSize: Int = 19
-    var forbiddenMovesEnabled: Bool = false  // 三三禁手、四四禁手、長連禁手
+
+    // Individual forbidden move toggles
+    var doubleThreeEnabled: Bool = false    // 三三禁手
+    var doubleFourEnabled: Bool = false     // 四四禁手
+    var overlineEnabled: Bool = false       // 長連禁手（六子以上）
+
+    // Per-rule targeting
+    var doubleThreeTarget: ForbiddenTarget = .blackOnly
+    var doubleFourTarget: ForbiddenTarget = .blackOnly
+    var overlineTarget: ForbiddenTarget = .blackOnly
 
     static let supportedBoardSizes = [15, 19, 21, 23, 25]
+
+    /// Check if any forbidden rule applies to the given player
+    func hasForbiddenRules(for player: PlayerColor) -> Bool {
+        if doubleThreeEnabled && ruleApplies(target: doubleThreeTarget, player: player) { return true }
+        if doubleFourEnabled && ruleApplies(target: doubleFourTarget, player: player) { return true }
+        if overlineEnabled && ruleApplies(target: overlineTarget, player: player) { return true }
+        return false
+    }
+
+    func ruleApplies(target: ForbiddenTarget, player: PlayerColor) -> Bool {
+        switch target {
+        case .blackOnly: return player == .black
+        case .both: return true
+        }
+    }
 }
 
 // MARK: - Gomoku Model
@@ -66,8 +97,8 @@ struct GomokuModel {
             return false
         }
 
-        // Check forbidden moves for black (if enabled)
-        if rules.forbiddenMovesEnabled && currentPlayer == .black {
+        // Check forbidden moves (if any rule enabled for current player)
+        if rules.hasForbiddenRules(for: currentPlayer) {
             if isForbiddenMove(row: row, col: col) {
                 return false
             }
@@ -130,14 +161,14 @@ struct GomokuModel {
         checkWin()
     }
 
-    // MARK: - Forbidden Move Detection (簡化版)
+    // MARK: - Forbidden Move Detection (per-rule)
 
-    /// Check if placing black at (row, col) is a forbidden move.
-    /// Simplified: checks for double-three (三三) and double-four (四四).
+    /// Check if placing current player's piece at (row, col) is a forbidden move.
+    /// Checks each rule independently based on its enabled state and target.
     private func isForbiddenMove(row: Int, col: Int) -> Bool {
-        // Temporarily place the piece
+        let playerState = CellState.from(currentPlayer)
         var tempBoard = board
-        tempBoard[row][col] = .black
+        tempBoard[row][col] = playerState
 
         var threeCount = 0
         var fourCount = 0
@@ -151,20 +182,37 @@ struct GomokuModel {
 
         for axis in axes {
             let lineCount = countInDirection(board: tempBoard, row: row, col: col,
-                                              state: .black, axis: axis)
+                                              state: playerState, axis: axis)
             if lineCount == 3 {
-                // Check if it's an "open three" (both ends open)
-                if isOpenLine(board: tempBoard, row: row, col: col, state: .black, axis: axis, length: 3) {
+                if isOpenLine(board: tempBoard, row: row, col: col, state: playerState, axis: axis, length: 3) {
                     threeCount += 1
                 }
             } else if lineCount == 4 {
-                fourCount += 1
+                // Only "open fours" (both ends clear) count toward the double-four rule.
+                // A four blocked on one side (dead four) cannot be played around freely,
+                // so it does not create the branching threat the rule is designed to prevent.
+                if isOpenLine(board: tempBoard, row: row, col: col, state: playerState, axis: axis, length: 4) {
+                    fourCount += 1
+                }
             } else if lineCount >= 6 {
-                return true // Overline forbidden
+                // Overline check
+                if rules.overlineEnabled && rules.ruleApplies(target: rules.overlineTarget, player: currentPlayer) {
+                    return true
+                }
             }
         }
 
-        return threeCount >= 2 || fourCount >= 2
+        // Double-three check
+        if rules.doubleThreeEnabled && rules.ruleApplies(target: rules.doubleThreeTarget, player: currentPlayer) {
+            if threeCount >= 2 { return true }
+        }
+
+        // Double-four check
+        if rules.doubleFourEnabled && rules.ruleApplies(target: rules.doubleFourTarget, player: currentPlayer) {
+            if fourCount >= 2 { return true }
+        }
+
+        return false
     }
 
     private func countInDirection(board: [[CellState]], row: Int, col: Int,

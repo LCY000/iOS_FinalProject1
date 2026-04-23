@@ -5,20 +5,27 @@
 //  Post-connection room where Host selects the game, configures rules, and starts.
 //  Includes chat overlay for communication.
 //
+//  All session / rematch / disconnect state lives in GameSessionCoordinator —
+//  this view is pure layout + wiring.
+//
 
 import SwiftUI
 
 struct RoomView: View {
     @Bindable var multipeerManager: MultipeerManager
+    @Environment(\.dismiss) private var dismiss
 
+    @State private var session: GameSessionCoordinator
     @State private var selectedGameIndex: Int = 0
-    @State private var gameStarted = false
-    @State private var engine: (any GameEngine)?
-    @State private var showDisconnectAlert = false
-    @State private var chatManager = ChatManager()
-
-    // Create a temporary engine for settings preview
     @State private var settingsEngine: (any GameEngine)?
+    @State private var showLeaveConfirmation: Bool = false
+
+    init(multipeerManager: MultipeerManager) {
+        self.multipeerManager = multipeerManager
+        self._session = State(
+            initialValue: GameSessionCoordinator(multipeerManager: multipeerManager)
+        )
+    }
 
     private var availableGames: [GameInfo] {
         GameRegistry.availableGames
@@ -27,14 +34,11 @@ struct RoomView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 24) {
-                // MARK: - Connected Info
                 connectedHeader
 
-                // MARK: - Game Selection (Host only)
                 if multipeerManager.isHost {
                     gameSelectionSection
 
-                    // MARK: - Game Settings
                     if let settingsEngine = settingsEngine {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("遊戲設定")
@@ -50,10 +54,10 @@ struct RoomView: View {
 
                 Spacer()
 
-                // MARK: - Start Button (Host only)
                 if multipeerManager.isHost {
                     Button {
-                        startGame()
+                        let game = availableGames[selectedGameIndex]
+                        session.hostStartGame(game: game, settingsEngine: settingsEngine)
                     } label: {
                         Text("開始遊戲")
                             .font(.title2.bold())
@@ -69,13 +73,14 @@ struct RoomView: View {
                     .padding(.bottom, 20)
                 }
             }
+            .animatedEntrance()
             .navigationTitle("遊戲房間")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        multipeerManager.disconnect()
+                        showLeaveConfirmation = true
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
@@ -83,43 +88,127 @@ struct RoomView: View {
                         }
                     }
                 }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if session.engine != nil && !session.gameStarted {
+                        Button {
+                            session.continueGame()
+                        } label: {
+                            Text("繼續遊戲")
+                                .foregroundStyle(.green)
+                                .bold()
+                        }
+                    }
+                }
             }
-            .navigationDestination(isPresented: $gameStarted) {
-                if let engine = engine {
+            .navigationDestination(isPresented: $session.gameStarted) {
+                if let engine = session.engine {
                     engine.makeGameView()
+                        .overlay(alignment: .top) {
+                            PeerLeftBanner(session: session)
+                        }
+                        .overlay(alignment: .center) {
+                            RematchWaitingOverlay(session: session)
+                        }
                         .overlay(
-                            ChatOverlayView(chatManager: chatManager)
+                            ChatOverlayView(chatManager: session.chatManager)
                         )
-                        .onDisappear {
-                            engine.onMoveToSend = nil
+                        .alert("對手想再來一局", isPresented: $session.showRestartVoteAlert) {
+                            Button("同意") { session.respondToRestart(accepted: true) }
+                            Button("拒絕", role: .cancel) { session.respondToRestart(accepted: false) }
+                        } message: {
+                            Text("對手想重新開始這局遊戲，是否同意？")
+                        }
+                        .alert("對手拒絕了", isPresented: $session.restartRejectedAlert) {
+                            Button("OK", role: .cancel) {}
+                        } message: {
+                            Text("對手不想再來一局。")
                         }
                 }
             }
 
-            // MARK: - Chat Overlay (available in room too)
-            ChatOverlayView(chatManager: chatManager)
+            // Chat is available in the room too. When a game is active the
+            // navigationDestination pushes a separate overlay so only one is
+            // ever visible; the centralized toast state in ChatManager keeps
+            // them in sync.
+            if !session.gameStarted {
+                ChatOverlayView(chatManager: session.chatManager)
+            }
         }
         .onAppear {
-            setupCallbacks()
+            session.attachHandlers()
             updateSettingsEngine()
         }
         .onChange(of: selectedGameIndex) { _, _ in
             updateSettingsEngine()
         }
         .onChange(of: multipeerManager.connectionState) { _, newState in
-            if newState == .disconnected || newState == .notConnected {
-                if !gameStarted {
-                    showDisconnectAlert = true
-                }
-            }
+            session.handleConnectionStateChange(newState)
         }
-        .alert("連線已中斷", isPresented: $showDisconnectAlert) {
+        .alert("連線已中斷", isPresented: $session.showDisconnectAlert) {
             Button("返回大廳") {
                 multipeerManager.disconnect()
+                dismiss()
             }
         } message: {
             Text("與對手的連線已中斷，請返回大廳重新配對。")
         }
+        // Rematch alerts also live on RoomView so they trigger even when the
+        // user is on the room screen (no game pushed yet).
+        .alert("對手想再來一局", isPresented: roomLevelRestartVoteBinding()) {
+            Button("同意") { session.respondToRestart(accepted: true) }
+            Button("拒絕", role: .cancel) { session.respondToRestart(accepted: false) }
+        } message: {
+            Text("對手想重新開始這局遊戲，是否同意？")
+        }
+        .alert("對手拒絕了", isPresented: roomLevelRestartRejectedBinding()) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("對手不想再來一局。")
+        }
+        .confirmationDialog(
+            "確認離開房間？",
+            isPresented: $showLeaveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("離開並中斷連線", role: .destructive) {
+                session.leaveRoom()
+                dismiss()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("離開後會與對方中斷連線，確定嗎？")
+        }
+    }
+
+    // MARK: - Room-Level Alert Bindings
+    //
+    // We want the rematch alerts to fire regardless of whether the game view
+    // is pushed. But having the same `.alert(isPresented:)` attached twice
+    // with the same binding would race. Instead we gate the RoomView alerts
+    // so they only fire when gameStarted is false; the in-game alerts
+    // (inside navigationDestination) handle the other case.
+
+    private func roomLevelRestartVoteBinding() -> Binding<Bool> {
+        Binding(
+            get: { session.showRestartVoteAlert && !session.gameStarted },
+            set: { newValue in
+                if !newValue && !session.gameStarted {
+                    session.showRestartVoteAlert = false
+                }
+            }
+        )
+    }
+
+    private func roomLevelRestartRejectedBinding() -> Binding<Bool> {
+        Binding(
+            get: { session.restartRejectedAlert && !session.gameStarted },
+            set: { newValue in
+                if !newValue && !session.gameStarted {
+                    session.restartRejectedAlert = false
+                }
+            }
+        )
     }
 
     // MARK: - Connected Header
@@ -134,7 +223,7 @@ struct RoomView: View {
                 .font(.headline)
 
             if let peerName = multipeerManager.connectedPeerName {
-                Text("對手：\(peerName)")
+                Text("對手:\(peerName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -203,117 +292,66 @@ struct RoomView: View {
         let game = availableGames[selectedGameIndex]
         settingsEngine = game.createEngine()
     }
+}
 
-    // MARK: - Actions
+// MARK: - Peer Left Banner (in-game, non-blocking)
 
-    private func startGame() {
-        let selectedGame = availableGames[selectedGameIndex]
-        let newEngine: any GameEngine
+private struct PeerLeftBanner: View {
+    @Bindable var session: GameSessionCoordinator
 
-        // Use settings from the settingsEngine if it exists
-        if let se = settingsEngine {
-            newEngine = se
-        } else {
-            newEngine = selectedGame.createEngine()
-        }
-
-        newEngine.isMultiplayer = true
-        newEngine.localPlayer = .black
-
-        // Wire networking
-        newEngine.onMoveToSend = { [weak multipeerManager] envelope in
-            multipeerManager?.send(envelope: envelope)
-        }
-
-        self.engine = newEngine
-        gameStarted = true
-
-        // Send startGame envelope with settings to peer
-        let settingsData = newEngine.exportSettings()
-        let startInfo = StartGamePayload(
-            gameType: selectedGame.gameType,
-            settings: settingsData
-        )
-        let startPayload = try! JSONEncoder().encode(startInfo)
-        let envelope = MessageEnvelope(
-            type: .startGame,
-            gameType: selectedGame.gameType,
-            payload: startPayload
-        )
-        multipeerManager.send(envelope: envelope)
-
-        // Re-wire envelope handler for game moves (host side)
-        multipeerManager.onEnvelopeReceived = { [weak newEngine, weak chatManager] envelope in
-            switch envelope.type {
-            case .playerMove:
-                newEngine?.receiveRemoteMove(data: envelope.payload)
-            case .chat:
-                chatManager?.receiveEnvelope(envelope)
-            default:
-                break
-            }
-        }
-    }
-
-    private func setupCallbacks() {
-        // Wire chat sending
-        chatManager.onSendEnvelope = { [weak multipeerManager] envelope in
-            multipeerManager?.send(envelope: envelope)
-        }
-
-        multipeerManager.onEnvelopeReceived = { envelope in
-            switch envelope.type {
-            case .startGame:
-                // Guest receives startGame — create engine with settings
-                if let startInfo = try? JSONDecoder().decode(StartGamePayload.self, from: envelope.payload),
-                   let game = availableGames.first(where: { $0.gameType == startInfo.gameType }) {
-
-                    let newEngine = game.createEngine()
-                    newEngine.applySettings(data: startInfo.settings)
-                    newEngine.isMultiplayer = true
-                    newEngine.localPlayer = .white
-
-                    newEngine.onMoveToSend = { [weak multipeerManager] envelope in
-                        multipeerManager?.send(envelope: envelope)
-                    }
-
-                    self.engine = newEngine
-                    self.gameStarted = true
-
-                    self.multipeerManager.onEnvelopeReceived = { [weak newEngine, weak chatManager] envelope in
-                        switch envelope.type {
-                        case .playerMove:
-                            newEngine?.receiveRemoteMove(data: envelope.payload)
-                        case .chat:
-                            chatManager?.receiveEnvelope(envelope)
-                        default:
-                            break
-                        }
-                    }
+    var body: some View {
+        if session.showPeerLeftBanner {
+            HStack(spacing: 8) {
+                Image(systemName: "person.slash.fill")
+                    .foregroundStyle(.orange)
+                Text("對方已離開房間")
+                    .font(.subheadline.bold())
+                Spacer(minLength: 8)
+                Button {
+                    session.showPeerLeftBanner = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
-
-            case .chat:
-                chatManager.receiveEnvelope(envelope)
-
-            case .playerMove:
-                engine?.receiveRemoteMove(data: envelope.payload)
-
-            default:
-                break
+                .buttonStyle(.plain)
             }
-        }
-
-        multipeerManager.onDisconnected = {
-            showDisconnectAlert = true
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 }
 
-// MARK: - Start Game Payload
+// MARK: - Rematch Waiting Overlay
 
-struct StartGamePayload: Codable {
-    let gameType: String
-    let settings: Data
+private struct RematchWaitingOverlay: View {
+    @Bindable var session: GameSessionCoordinator
+
+    var body: some View {
+        if session.waitingForRestartResponse {
+            VStack(spacing: 12) {
+                ProgressView()
+                    .scaleEffect(1.2)
+                Text("等待對手回應…")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(24)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.2), radius: 12)
+            )
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
 }
 
 #Preview {

@@ -56,12 +56,14 @@ class ReversiEngine: GameEngine {
     }
 
     var board: [[CellState]] { model.board }
+    var lastMove: (row: Int, col: Int)? { model.lastMove }
 
     // MARK: - Multiplayer
 
     var isMultiplayer: Bool = false
     var localPlayer: PlayerColor = .black
     var onMoveToSend: ((MessageEnvelope) -> Void)?
+    var onRestartRequested: (() -> Void)?
 
     var turnWasSkipped: Bool = false
     var skippedPlayer: PlayerColor = .black
@@ -94,6 +96,9 @@ class ReversiEngine: GameEngine {
 
     func receiveRemoteMove(data: Data) {
         guard let move = MoveMessage.fromData(data) else { return }
+        // Defend against our own echo / out-of-order packets: only accept a
+        // remote move when it's the peer's turn from our perspective.
+        guard isMultiplayer, currentPlayer != localPlayer else { return }
         _ = model.placePiece(row: move.row, col: move.col)
         checkAndSkipTurn()
     }
@@ -131,15 +136,7 @@ class ReversiEngine: GameEngine {
 
     private func executePlacement(row: Int, col: Int) {
         guard model.placePiece(row: row, col: col) else { return }
-        if isMultiplayer {
-            let move = MoveMessage(row: row, col: col)
-            let envelope = MessageEnvelope(
-                type: .playerMove,
-                gameType: ReversiEngine.gameType,
-                payload: move.toData()
-            )
-            onMoveToSend?(envelope)
-        }
+        sendMoveEnvelope(row: row, col: col, gameType: ReversiEngine.gameType)
         checkAndSkipTurn()
     }
 

@@ -92,6 +92,7 @@ struct LobbyView: View {
             Spacer()
         }
         .padding(.top, 20)
+        .animatedEntrance()
         .navigationTitle("連線對戰")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $navigateToRoom) {
@@ -102,6 +103,10 @@ struct LobbyView: View {
             print("🔵 [Lobby] connectionState: \(oldState.rawValue) → \(newState.rawValue)")
             if newState == .connected && !navigateToRoom {
                 navigateToRoom = true
+            }
+            // Reset navigation when disconnected — ensures RoomView is popped
+            if newState == .disconnected || newState == .notConnected {
+                navigateToRoom = false
             }
         }
         .onAppear {

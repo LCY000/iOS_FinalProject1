@@ -35,6 +35,7 @@ struct ReversiGameView: View {
             Spacer(minLength: 0)
         }
         .padding(.top)
+        .animatedEntrance()
         .navigationTitle("黑白棋")
         .navigationBarTitleDisplayMode(.inline)
         .alert("跳過回合", isPresented: $engine.turnWasSkipped) {
@@ -92,7 +93,11 @@ struct ReversiGameView: View {
         HStack {
             if engine.isGameOver {
                 Button {
-                    engine.reset()
+                    if engine.isMultiplayer {
+                        engine.onRestartRequested?()
+                    } else {
+                        engine.reset()
+                    }
                 } label: {
                     Label("再來一局", systemImage: "arrow.counterclockwise")
                         .font(.subheadline.bold())
@@ -145,11 +150,13 @@ struct ReversiGameView: View {
                     HStack(spacing: 0) {
                         ForEach(0..<engine.boardSize, id: \.self) { col in
                             let isPending = engine.pendingMove?.row == row && engine.pendingMove?.col == col
+                            let isLastMove = engine.lastMove?.row == row && engine.lastMove?.col == col
                             ReversiCellView(
                                 cellState: engine.board[row][col],
                                 isValidMove: isValidMove(row: row, col: col),
                                 isPending: isPending,
                                 pendingColor: isPending ? CellState.from(engine.currentPlayer) : .empty,
+                                isLastMove: isLastMove,
                                 action: { engine.handleTap(row: row, col: col) }
                             )
                             .frame(width: cellSize, height: cellSize)

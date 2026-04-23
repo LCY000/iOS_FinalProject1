@@ -7,10 +7,12 @@
 ## 專案概述
 
 iOS 多人棋盤遊戲平台，支援：
+
 - **黑白棋 (Reversi)** — 6×6 / 8×8 / 10×10 / 12×12
 - **五子棋 (Gomoku)** — 15×15 / 19×19 / 21×21 / 23×23 / 25×25，可選禁手
 
 核心特色：
+
 - **離線連線對戰**（MultipeerConnectivity，藍牙/Wi-Fi 直連）
 - **模組化架構** — 新增遊戲只需實作 `GameEngine` 協議 + 註冊到 `GameRegistry`
 - **聊天系統** — 浮動膠囊 + Sheet
@@ -21,14 +23,14 @@ iOS 多人棋盤遊戲平台，支援：
 
 ## 技術規格
 
-| 項目 | 值 |
-|------|---|
-| 語言 | Swift (SwiftUI) |
-| 最低版本 | iOS 26.2 |
-| 連線框架 | MultipeerConnectivity |
-| 狀態管理 | `@Observable` (iOS 17+) |
+| 項目     | 值                                          |
+| -------- | ------------------------------------------- |
+| 語言     | Swift (SwiftUI)                             |
+| 最低版本 | iOS 26.2                                    |
+| 連線框架 | MultipeerConnectivity                       |
+| 狀態管理 | `@Observable` (iOS 17+)                     |
 | 並行設定 | `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` |
-| UI 語言 | 繁體中文 |
+| UI 語言  | 繁體中文                                    |
 
 ---
 
@@ -114,6 +116,7 @@ protocol GameEngine: AnyObject, Observable {
 ### MessageEnvelope（通用網路封包）
 
 所有網路通訊都透過 `MessageEnvelope`，包含：
+
 - `type`: `.startGame` / `.playerMove` / `.setRules` / `.chat` / `.gameOver`
 - `gameType`: 遊戲識別碼 (e.g. `"reversi"`, `"gomoku"`)
 - `payload`: 遊戲專屬的 JSON Data
@@ -189,6 +192,7 @@ Host 按「開始」
 ### DEBUG_TEST_MODE
 
 `ContentView.swift` 第 13 行的 `DEBUG_TEST_MODE` 開關：
+
 - `true`: 首頁顯示「🛠 測試模式」按鈕，可一人操作雙方 + 聊天
 - `false`: 隱藏測試按鈕（正式版）
 
@@ -198,10 +202,57 @@ Host 按「開始」
 
 ---
 
-## 目前已知問題
+## v0.1.0 架構更新
+
+### GameEngine 協議擴充（v0.1.0）
+
+新增共用 extension helper，所有遊戲直接使用：
+
+```swift
+extension GameEngine {
+    func sendMoveEnvelope(row: Int, col: Int, gameType: String)
+}
+```
+
+各 engine 的 `executePlacement` 直接呼叫 `sendMoveEnvelope(...)` 取代重複的封包組裝邏輯。
+
+### 五子棋四四禁手修正（v0.1.0）
+
+`GomokuModel.isForbiddenMove` 現在只計算「活四」（兩端皆空）進入四四判定，封堵一端的「死四」不再誤觸禁手。
+
+### 單元測試
+
+測試檔案位於 `Final ProjectTests/`：
+- `ReversiModelTests.swift` — 黑白棋純邏輯（初始盤面、合法步、翻面、勝負）
+- `GomokuModelTests.swift` — 五子棋純邏輯（五連判定、三三/四四/長連禁手）
+
+**啟用測試（第一次設定）**：
+1. Xcode → File → New → Target → Unit Testing Bundle，命名 `Final ProjectTests`
+2. 把 `Final ProjectTests/*.swift` 加到該 target（Target Membership 勾選）
+3. `⌘U` 執行
+
+---
+
+## 目前已知問題（不知道原因
 
 - **iPhone 實機白屏**：疑似 Xcode debugger 無法 attach 到裝置，非程式碼問題。嘗試：
   1. `Ctrl + Cmd + R`（Run Without Debugging）
   2. 刪除手機上的 app → Clean Build Folder → 重新 Build & Run
   3. 重啟 iPhone + Xcode
-  目前還無法解決，手機是 iphone 15 pro，版本是ios 26.3.1(a)
+     目前還無法解決，手機是 iphone 15 pro，版本是ios 26.3.1(a)
+
+## 需要立即解決的問題或是建議
+
+還沒解決之前暫時放下的問題項目、建議，不分先後順序，可以整理看看適合解決的先後順序，會比較不容易有bug，或是一起修正
+
+1. ~~再來一場時，要投票但不太懂為什麼通知詢問要出去棋盤才看到~~ ✅ 已修（v0.1.0）— 投票 alert 現在掛在遊戲畫面上 + RoomView 兩邊。
+   ![alt text](docs/image.png)
+2. ~~按下再來一場按鈕後，假如對面按拒絕，也不要卡住~~ ✅ 已修（v0.1.0）— waiting overlay 在收到回應 / 對方離開 / 連線斷時都會清掉。![alt text](docs/image-1.png)
+3. ~~離開房間功能，主動離開房間的，要跳出是否離開房間、中斷連線的選擇通知~~ ✅ 已修（v0.1.0）— 加了 `.confirmationDialog`；自己主動離開時不會再跳「連線已中斷」。
+4. ~~離開房間功能，對方主動離開時...會跳出兩次~~ ✅ 已修（v0.1.0）— 主動 / 被動斷線改走同一條 `handleConnectionStateChange`，不再雙路徑。
+   ![alt text](docs/image-2.png)
+5. ~~棋盤遊玩頁面對面離開房間也要通知~~ ✅ 已修（v0.1.0）— 新增 `.peerLeftRoom` MessageType + 遊戲畫面頂部 `PeerLeftBanner`（不阻擋操作）。
+6. ~~遊戲到一半不小心手滑到前一頁~~ ✅ 右上角「繼續遊戲」按鈕已有，v0.1.0 修掉了 push/pop 抖動。![alt text](docs/image-3.png)
+7. ~~聊天功能幽靈通知~~ ✅ 已修（v0.1.0）— toast 狀態集中到 `ChatManager.toastMessage`，單一真相來源。![alt text](docs/image-4.png)
+8. ~~五子棋有上一步標記但黑白棋沒有~~ ✅ 已修（v0.1.0）— `ReversiModel.lastMove` + `ReversiCellView` 紅色環，翻面動畫結束後才顯示。
+9. ~~進場動畫上下不一致~~ ✅ 已修（v0.1.0）— 新增 `.animatedEntrance()` view modifier，所有主畫面一致。

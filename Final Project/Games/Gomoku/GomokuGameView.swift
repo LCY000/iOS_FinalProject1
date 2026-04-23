@@ -53,6 +53,7 @@ struct GomokuGameView: View {
                 .padding(.bottom, 8)
         }
         .padding(.top)
+        .animatedEntrance()
         .navigationTitle("五子棋")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -165,7 +166,11 @@ struct GomokuGameView: View {
             // Confirm/Cancel or Game Over (right side)
             if engine.isGameOver {
                 Button {
-                    engine.reset()
+                    if engine.isMultiplayer {
+                        engine.onRestartRequested?()
+                    } else {
+                        engine.reset()
+                    }
                 } label: {
                     Label("再來一局", systemImage: "arrow.counterclockwise")
                         .font(.subheadline.bold())

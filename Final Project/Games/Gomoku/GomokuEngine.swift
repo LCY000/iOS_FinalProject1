@@ -69,6 +69,7 @@ class GomokuEngine: GameEngine {
     var isMultiplayer: Bool = false
     var localPlayer: PlayerColor = .black
     var onMoveToSend: ((MessageEnvelope) -> Void)?
+    var onRestartRequested: (() -> Void)?
 
     // MARK: - Move Confirmation
 
@@ -100,6 +101,9 @@ class GomokuEngine: GameEngine {
 
     func receiveRemoteMove(data: Data) {
         guard let move = MoveMessage.fromData(data) else { return }
+        // Defend against our own echo / out-of-order packets: only accept a
+        // remote move when it's the peer's turn from our perspective.
+        guard isMultiplayer, currentPlayer != localPlayer else { return }
         _ = model.placePiece(row: move.row, col: move.col)
     }
 
@@ -135,15 +139,6 @@ class GomokuEngine: GameEngine {
 
     private func executePlacement(row: Int, col: Int) {
         guard model.placePiece(row: row, col: col) else { return }
-
-        if isMultiplayer {
-            let move = MoveMessage(row: row, col: col)
-            let envelope = MessageEnvelope(
-                type: .playerMove,
-                gameType: GomokuEngine.gameType,
-                payload: move.toData()
-            )
-            onMoveToSend?(envelope)
-        }
+        sendMoveEnvelope(row: row, col: col, gameType: GomokuEngine.gameType)
     }
 }

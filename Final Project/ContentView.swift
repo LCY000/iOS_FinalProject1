@@ -8,9 +8,13 @@
 import SwiftUI
 
 // MARK: - Debug Mode Toggle
-// Set to `true` to enable the debug test mode button on the home screen.
-// Set to `false` for production builds.
-let DEBUG_TEST_MODE = true  
+// Controlled by the build configuration: present in Debug builds only so
+// production / Release archives never include the test-mode button.
+#if DEBUG
+let DEBUG_TEST_MODE = true
+#else
+let DEBUG_TEST_MODE = false
+#endif
 
 struct ContentView: View {
     var body: some View {
@@ -80,6 +84,7 @@ struct ContentView: View {
 
                 Spacer()
             }
+            .animatedEntrance()
         }
     }
 
@@ -164,6 +169,7 @@ struct GamePickerView: View {
             .padding(.horizontal, 24)
             .padding(.top, 16)
         }
+        .animatedEntrance()
         .navigationTitle("選擇遊戲")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showSettings) {
@@ -233,6 +239,7 @@ struct GameSettingsView: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 20)
         }
+        .animatedEntrance()
         .navigationTitle("遊戲設定")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $navigateToGame) {

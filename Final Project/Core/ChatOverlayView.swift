@@ -5,23 +5,26 @@
 //  Compact chat capsule button + floating toast for incoming messages.
 //  Tapping opens a full chat sheet.
 //
+//  Toast state lives on ChatManager (not on this view's @State), so multiple
+//  overlays sharing the same manager never desync and never produce ghost
+//  toasts when the user navigates back and forth.
+//
 
 import SwiftUI
 
 struct ChatOverlayView: View {
     @Bindable var chatManager: ChatManager
     @State private var showChatSheet = false
-    @State private var toastMessage: String?
-    @State private var toastTimer: Timer?
+    @State private var inputText = ""
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
 
             // MARK: - Floating Toast (incoming message)
-            if let msg = toastMessage {
+            if let msg = chatManager.toastMessage {
                 Button {
-                    dismissToast()
+                    chatManager.dismissToast()
                     showChatSheet = true
                 } label: {
                     HStack(spacing: 6) {
@@ -46,7 +49,7 @@ struct ChatOverlayView: View {
                     DragGesture(minimumDistance: 10)
                         .onEnded { value in
                             if value.translation.height > 0 {
-                                dismissToast()
+                                chatManager.dismissToast()
                             }
                         }
                 )
@@ -74,35 +77,9 @@ struct ChatOverlayView: View {
             }
             .padding(.bottom, 6)
         }
-        .animation(.spring(duration: 0.3), value: toastMessage != nil)
+        .animation(.spring(duration: 0.3), value: chatManager.toastMessage != nil)
         .sheet(isPresented: $showChatSheet) {
             chatSheet
-        }
-        .onChange(of: chatManager.latestPeerMessage?.id) { _, _ in
-            if let msg = chatManager.latestPeerMessage {
-                showToast(msg.text)
-            }
-        }
-    }
-
-    // MARK: - Toast Logic
-
-    private func showToast(_ text: String) {
-        toastTimer?.invalidate()
-        let preview = String(text.prefix(20)) + (text.count > 20 ? "…" : "")
-        toastMessage = preview
-        toastTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
-            Task { @MainActor in
-                dismissToast()
-            }
-        }
-    }
-
-    private func dismissToast() {
-        toastTimer?.invalidate()
-        toastTimer = nil
-        withAnimation {
-            toastMessage = nil
         }
     }
 
@@ -170,8 +147,6 @@ struct ChatOverlayView: View {
     }
 
     // MARK: - Input Bar
-
-    @State private var inputText = ""
 
     private var chatInputBar: some View {
         HStack(spacing: 8) {
