@@ -78,7 +78,7 @@ struct RoomView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         showLeaveConfirmation = true
                     } label: {
@@ -89,7 +89,7 @@ struct RoomView: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     if session.engine != nil && !session.gameStarted {
                         Button {
                             session.continueGame()
@@ -152,6 +152,14 @@ struct RoomView: View {
             }
         } message: {
             Text("與對手的連線已中斷，請返回大廳重新配對。")
+        }
+        .alert("同步錯誤", isPresented: $session.showDesyncAlert) {
+            Button("返回大廳") {
+                session.gameStarted = false
+                dismiss()
+            }
+        } message: {
+            Text("連線發生同步異常，請返回大廳重新配對。")
         }
         // Rematch alerts also live on RoomView so they trigger even when the
         // user is on the room screen (no game pushed yet).
@@ -227,6 +235,17 @@ struct RoomView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+
+            HStack(spacing: 4) {
+                Image(systemName: multipeerManager.connectionMode == .wifi ? "wifi" : "airplane")
+                    .font(.caption)
+                Text(multipeerManager.connectionMode.rawValue)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+            .foregroundStyle(.secondary)
         }
         .padding(.top, 20)
     }

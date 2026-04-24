@@ -59,6 +59,11 @@ final class GameSessionCoordinator {
     /// keep viewing the board.
     var showPeerLeftBanner: Bool = false
 
+    // MARK: - Desync
+
+    /// Fired when a received MoveMessage.seq doesn't match expectedRecvSeq.
+    var showDesyncAlert: Bool = false
+
     // MARK: - Init
 
     init(multipeerManager: MultipeerManager) {
@@ -237,6 +242,11 @@ final class GameSessionCoordinator {
         }
         engine.onRestartRequested = { [weak self] in
             self?.requestRestart()
+        }
+        engine.onDesyncDetected = { [weak self] in
+            guard let self else { return }
+            self.showDesyncAlert = true
+            self.multipeerManager.disconnect()
         }
     }
 

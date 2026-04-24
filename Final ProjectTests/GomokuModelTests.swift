@@ -334,4 +334,62 @@ final class GomokuModelTests: XCTestCase {
         XCTAssertEqual(model.board.count, 15)
         XCTAssertEqual(model.board[0].count, 15)
     }
+
+    // MARK: - Desync Detection
+
+    func testDesyncFiresOnWrongSeq() {
+        let engine = GomokuEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white
+
+        var desyncFired = false
+        engine.onDesyncDetected = { desyncFired = true }
+
+        // Feed seq=2 when expectedRecvSeq=1
+        let move = MoveMessage(row: 7, col: 7, seq: 2)
+        engine.receiveRemoteMove(data: move.toData())
+
+        XCTAssertTrue(desyncFired, "onDesyncDetected should fire on seq mismatch")
+        XCTAssertEqual(engine.model.board[7][7], .empty, "Board must not change on desync")
+    }
+
+    func testDesyncDoesNotFireOnCorrectSeq() {
+        let engine = GomokuEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white
+
+        var desyncFired = false
+        engine.onDesyncDetected = { desyncFired = true }
+
+        let move = MoveMessage(row: 9, col: 9, seq: 1)
+        engine.receiveRemoteMove(data: move.toData())
+
+        XCTAssertFalse(desyncFired, "onDesyncDetected must not fire on correct seq")
+        XCTAssertNotEqual(engine.model.board[9][9], .empty)
+        XCTAssertEqual(engine.expectedRecvSeq, 2)
+    }
+
+    func testDesyncFiresOnGarbageData() {
+        let engine = GomokuEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white
+
+        var desyncFired = false
+        engine.onDesyncDetected = { desyncFired = true }
+
+        engine.receiveRemoteMove(data: Data([0xDE, 0xAD]))
+
+        XCTAssertTrue(desyncFired, "onDesyncDetected should fire when payload cannot be decoded")
+    }
+
+    func testSeqResetsOnEngineReset() {
+        let engine = GomokuEngine()
+        engine.nextSendSeq = 5
+        engine.expectedRecvSeq = 3
+
+        engine.reset()
+
+        XCTAssertEqual(engine.nextSendSeq, 1)
+        XCTAssertEqual(engine.expectedRecvSeq, 1)
+    }
 }

@@ -8,5 +8,7 @@
     <array>
         <string>_game-platform._tcp</string>
     </array>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>藍牙模式用於近距離無路由器對戰（飛航模式可用）</string>
 </dict>
 </plist>

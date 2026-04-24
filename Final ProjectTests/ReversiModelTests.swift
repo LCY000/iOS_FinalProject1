@@ -226,15 +226,16 @@ final class ReversiModelTests: XCTestCase {
     // MARK: - Message Encode / Decode
 
     func testMoveMessageRoundTrip() {
-        let original = MoveMessage(row: 3, col: 7)
+        let original = MoveMessage(row: 3, col: 7, seq: 1)
         let data = original.toData()
         let decoded = MoveMessage.fromData(data)
         XCTAssertEqual(decoded?.row, 3)
         XCTAssertEqual(decoded?.col, 7)
+        XCTAssertEqual(decoded?.seq, 1)
     }
 
     func testMessageEnvelopeRoundTrip() {
-        let payload = MoveMessage(row: 4, col: 2).toData()
+        let payload = MoveMessage(row: 4, col: 2, seq: 1).toData()
         let env = MessageEnvelope(type: .playerMove, gameType: "reversi", payload: payload)
         guard let data = env.encode(), let decoded = MessageEnvelope.decode(from: data) else {
             XCTFail("Encode/decode should succeed")
@@ -247,5 +248,69 @@ final class ReversiModelTests: XCTestCase {
 
     func testMessageEnvelopeDecodeGarbage() {
         XCTAssertNil(MessageEnvelope.decode(from: Data([0x00, 0xFF, 0x42])))
+    }
+
+    // MARK: - Desync Detection
+
+    func testDesyncFiresOnWrongSeq() {
+        let engine = ReversiEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white  // so black's move (seq=1) is expected
+
+        var desyncFired = false
+        engine.onDesyncDetected = { desyncFired = true }
+
+        // Feed seq=2 when expectedRecvSeq=1
+        let move = MoveMessage(row: 3, col: 2, seq: 2)
+        engine.receiveRemoteMove(data: move.toData())
+
+        XCTAssertTrue(desyncFired, "onDesyncDetected should fire on seq mismatch")
+        XCTAssertEqual(engine.model.board[3][2], .empty, "Board must not change on desync")
+    }
+
+    func testDesyncDoesNotFireOnCorrectSeq() {
+        let engine = ReversiEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white
+
+        var desyncFired = false
+        engine.onDesyncDetected = { desyncFired = true }
+
+        let validMoves = engine.model.validMoves(for: .black)
+        guard let first = validMoves.first else {
+            XCTFail("Should have valid moves for black in opening")
+            return
+        }
+        let move = MoveMessage(row: first.row, col: first.col, seq: 1)
+        engine.receiveRemoteMove(data: move.toData())
+
+        XCTAssertFalse(desyncFired, "onDesyncDetected must not fire on correct seq")
+        XCTAssertEqual(engine.expectedRecvSeq, 2)
+    }
+
+    func testDesyncFiresOnGarbageData() {
+        let engine = ReversiEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white
+
+        var desyncFired = false
+        engine.onDesyncDetected = { desyncFired = true }
+
+        engine.receiveRemoteMove(data: Data([0xFF, 0x00]))
+
+        XCTAssertTrue(desyncFired, "onDesyncDetected should fire when payload cannot be decoded")
+    }
+
+    func testSeqResetsOnEngineReset() {
+        let engine = ReversiEngine()
+        engine.isMultiplayer = true
+        engine.localPlayer = .white
+        engine.nextSendSeq = 5
+        engine.expectedRecvSeq = 7
+
+        engine.reset()
+
+        XCTAssertEqual(engine.nextSendSeq, 1)
+        XCTAssertEqual(engine.expectedRecvSeq, 1)
     }
 }

@@ -63,6 +63,7 @@ struct MessageEnvelope: Codable {
 struct MoveMessage: Codable {
     let row: Int
     let col: Int
+    let seq: UInt32
 
     func toData() -> Data {
         try! JSONEncoder().encode(self)
@@ -124,11 +125,12 @@ struct RestartResponsePayload: Codable {
 // MARK: - Game Engine Protocol Extension (shared helpers)
 
 extension GameEngine {
-    /// Encodes a player move and sends it to the peer via `onMoveToSend`.
+    /// Encodes a player move with a sequence number and sends it via `onMoveToSend`.
     /// No-op in single-player mode. Call this immediately after a valid placement.
     func sendMoveEnvelope(row: Int, col: Int, gameType: String) {
         guard isMultiplayer else { return }
-        let move = MoveMessage(row: row, col: col)
+        let move = MoveMessage(row: row, col: col, seq: nextSendSeq)
+        nextSendSeq &+= 1
         let envelope = MessageEnvelope(type: .playerMove, gameType: gameType, payload: move.toData())
         onMoveToSend?(envelope)
     }
@@ -179,6 +181,12 @@ protocol GameEngine: AnyObject, Observable {
 
     /// Set by the Room layer. Called when the player requests a restart (triggers voting in multiplayer).
     var onRestartRequested: (() -> Void)? { get set }
+
+    // MARK: Desync Detection
+    var nextSendSeq: UInt32 { get set }
+    var expectedRecvSeq: UInt32 { get set }
+    /// Fired when a received move's seq doesn't match `expectedRecvSeq`.
+    var onDesyncDetected: (() -> Void)? { get set }
 
     // MARK: View Factory
     @ViewBuilder func makeGameView() -> AnyView

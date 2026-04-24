@@ -70,6 +70,9 @@ class GomokuEngine: GameEngine {
     var localPlayer: PlayerColor = .black
     var onMoveToSend: ((MessageEnvelope) -> Void)?
     var onRestartRequested: (() -> Void)?
+    var nextSendSeq: UInt32 = 1
+    var expectedRecvSeq: UInt32 = 1
+    var onDesyncDetected: (() -> Void)?
 
     // MARK: - Move Confirmation
 
@@ -100,16 +103,24 @@ class GomokuEngine: GameEngine {
     }
 
     func receiveRemoteMove(data: Data) {
-        guard let move = MoveMessage.fromData(data) else { return }
-        // Defend against our own echo / out-of-order packets: only accept a
-        // remote move when it's the peer's turn from our perspective.
+        guard let move = MoveMessage.fromData(data) else {
+            onDesyncDetected?()
+            return
+        }
         guard isMultiplayer, currentPlayer != localPlayer else { return }
+        guard move.seq == expectedRecvSeq else {
+            onDesyncDetected?()
+            return
+        }
+        expectedRecvSeq &+= 1
         _ = model.placePiece(row: move.row, col: move.col)
     }
 
     func reset() {
         model.reset()
         pendingMove = nil
+        nextSendSeq = 1
+        expectedRecvSeq = 1
     }
 
     // MARK: - Settings

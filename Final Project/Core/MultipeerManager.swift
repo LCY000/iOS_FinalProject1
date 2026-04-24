@@ -2,21 +2,30 @@
 //  MultipeerManager.swift
 //  Final Project
 //
-//  Game-agnostic networking layer using MultipeerConnectivity.
-//  Only sends/receives MessageEnvelope — never touches game logic.
+//  Game-agnostic networking layer.
+//  Internally delegates to a GameTransport (MPCTransport or BluetoothTransport).
+//  All public API and @Observable state are unchanged — RoomView/Coordinator
+//  require zero modifications.
 //
 
 import Foundation
 import MultipeerConnectivity
 
+// MARK: - Connection Mode
+
+enum ConnectionMode: String, CaseIterable {
+    case wifi      = "WiFi"
+    case bluetooth = "藍牙"
+}
+
 // MARK: - Connection State
 
 enum ConnectionState: String {
     case notConnected = "未連線"
-    case hosting = "等待對手連線…"
-    case browsing = "尋找房間中…"
-    case connecting = "連線中…"
-    case connected = "已連線"
+    case hosting      = "等待對手連線…"
+    case browsing     = "尋找房間中…"
+    case connecting   = "連線中…"
+    case connected    = "已連線"
     case disconnected = "連線已中斷"
 }
 
@@ -26,13 +35,8 @@ struct DiscoveredPeer: Identifiable, Hashable {
     let id: MCPeerID
     let displayName: String
 
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-
-    static func == (lhs: DiscoveredPeer, rhs: DiscoveredPeer) -> Bool {
-        lhs.id == rhs.id
-    }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    static func == (lhs: DiscoveredPeer, rhs: DiscoveredPeer) -> Bool { lhs.id == rhs.id }
 }
 
 // MARK: - MultipeerManager
@@ -46,95 +50,55 @@ class MultipeerManager: NSObject {
     var discoveredPeers: [DiscoveredPeer] = []
     var connectedPeerName: String?
     var isHost: Bool = false
+    var connectionMode: ConnectionMode = .wifi
 
-    // MARK: Callbacks
+    // MARK: Callbacks (set by GameSessionCoordinator)
 
-    /// Called when a MessageEnvelope is received from the peer.
     var onEnvelopeReceived: ((MessageEnvelope) -> Void)?
-
-    /// Called when the peer disconnects unexpectedly.
     var onDisconnected: (() -> Void)?
-
-    /// Called when a peer successfully connects.
     var onPeerConnected: (() -> Void)?
 
-    // MARK: Private MC Objects
+    // MARK: Private
 
-    private let serviceType = "game-platform"  // ≤ 15 chars, lowercase + hyphens
-    private var myPeerID: MCPeerID
-    private var session: MCSession?
-    private var advertiser: MCNearbyServiceAdvertiser?
-    private var browser: MCNearbyServiceBrowser?
+    private var transport: (any GameTransport)?
 
-    // MARK: Init
-
-    override init() {
-        let displayName = UIDevice.current.name
-        self.myPeerID = MCPeerID(displayName: displayName)
-        super.init()
-    }
-
-    // MARK: - Host (Advertise)
+    // MARK: - Host
 
     func hostGame() {
         cleanup()
         isHost = true
-
-        let session = MCSession(peer: myPeerID, securityIdentity: nil, encryptionPreference: .none)
-        session.delegate = self
-        self.session = session
-
-        let advertiser = MCNearbyServiceAdvertiser(
-            peer: myPeerID,
-            discoveryInfo: nil,
-            serviceType: serviceType
-        )
-        advertiser.delegate = self
-        advertiser.startAdvertisingPeer()
-        self.advertiser = advertiser
-
+        let t = makeTransport()
+        wire(t)
+        transport = t
+        t.startHosting()
         connectionState = .hosting
     }
 
-    // MARK: - Join (Browse)
+    // MARK: - Join
 
     func joinGame() {
         cleanup()
         isHost = false
-
-        let session = MCSession(peer: myPeerID, securityIdentity: nil, encryptionPreference: .none)
-        session.delegate = self
-        self.session = session
-
-        let browser = MCNearbyServiceBrowser(peer: myPeerID, serviceType: serviceType)
-        browser.delegate = self
-        browser.startBrowsingForPeers()
-        self.browser = browser
-
+        let t = makeTransport()
+        wire(t)
+        transport = t
+        t.startBrowsing()
         connectionState = .browsing
         discoveredPeers = []
     }
 
-    // MARK: - Invite Peer
+    // MARK: - Invite
 
     func invitePeer(_ peer: DiscoveredPeer) {
-        guard let session = session else { return }
-        browser?.invitePeer(peer.id, to: session, withContext: nil, timeout: 30)
+        transport?.invite(peer)
         connectionState = .connecting
     }
 
-    // MARK: - Send Envelope
+    // MARK: - Send
 
     func send(envelope: MessageEnvelope) {
-        guard let session = session,
-              let data = envelope.encode(),
-              !session.connectedPeers.isEmpty else { return }
-
-        do {
-            try session.send(data, toPeers: session.connectedPeers, with: .reliable)
-        } catch {
-            print("MultipeerManager: Failed to send data — \(error.localizedDescription)")
-        }
+        guard let data = envelope.encode() else { return }
+        transport?.send(data)
     }
 
     // MARK: - Disconnect
@@ -144,112 +108,59 @@ class MultipeerManager: NSObject {
         connectionState = .notConnected
     }
 
-    // MARK: - Cleanup
+    // MARK: - Private
 
-    private func cleanup() {
-        advertiser?.stopAdvertisingPeer()
-        advertiser = nil
-        browser?.stopBrowsingForPeers()
-        browser = nil
-        session?.disconnect()
-        session = nil
-        discoveredPeers = []
-        connectedPeerName = nil
-        // Clear callbacks to prevent stale closures
-        onEnvelopeReceived = nil
-        onDisconnected = nil
-        onPeerConnected = nil
-        // Create fresh peer ID for next session (avoids stale MCPeerID issues)
-        myPeerID = MCPeerID(displayName: UIDevice.current.name)
-    }
-}
-
-// MARK: - MCSessionDelegate
-
-extension MultipeerManager: MCSessionDelegate {
-
-    nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        Task { @MainActor in
-            switch state {
-            case .connected:
-                self.connectionState = .connected
-                self.connectedPeerName = peerID.displayName
-                self.advertiser?.stopAdvertisingPeer()
-                self.browser?.stopBrowsingForPeers()
-                self.onPeerConnected?()
-
-            case .notConnected:
-                if self.connectionState == .connected {
-                    self.connectionState = .disconnected
-                    self.connectedPeerName = nil
-                    self.onDisconnected?()
-                }
-
-            case .connecting:
-                self.connectionState = .connecting
-
-            @unknown default:
-                break
-            }
+    private func makeTransport() -> any GameTransport {
+        switch connectionMode {
+        case .wifi:      return MPCTransport()
+        case .bluetooth: return BluetoothTransport()
         }
     }
 
-    nonisolated func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        let receivedData = data
-        Task { @MainActor in
-            guard let envelope = MessageEnvelope.decode(from: receivedData) else { return }
-            self.onEnvelopeReceived?(envelope)
-        }
-    }
-
-    // Required delegate methods (unused for this app)
-    nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
-    nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {}
-    nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
-}
-
-// MARK: - MCNearbyServiceAdvertiserDelegate
-
-extension MultipeerManager: MCNearbyServiceAdvertiserDelegate {
-
-    nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        // Auto-accept invitations
-        Task { @MainActor in
-            invitationHandler(true, self.session)
-        }
-    }
-
-    nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        print("MultipeerManager: Failed to advertise — \(error.localizedDescription)")
-        Task { @MainActor in
-            self.connectionState = .notConnected
-        }
-    }
-}
-
-// MARK: - MCNearbyServiceBrowserDelegate
-
-extension MultipeerManager: MCNearbyServiceBrowserDelegate {
-
-    nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        let peer = DiscoveredPeer(id: peerID, displayName: peerID.displayName)
-        Task { @MainActor in
+    private func wire(_ t: any GameTransport) {
+        t.onPeerDiscovered = { [weak self] peer in
+            guard let self else { return }
             if !self.discoveredPeers.contains(peer) {
                 self.discoveredPeers.append(peer)
             }
         }
-    }
-
-    nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        Task { @MainActor in
-            self.discoveredPeers.removeAll { $0.id == peerID }
+        t.onPeerConnected = { [weak self] name in
+            guard let self else { return }
+            self.connectionState = .connected
+            self.connectedPeerName = name
+            self.onPeerConnected?()
+        }
+        t.onPeerDisconnected = { [weak self] in
+            guard let self else { return }
+            guard self.connectionState == .connected else { return }
+            self.connectionState = .disconnected
+            self.connectedPeerName = nil
+            self.onDisconnected?()
+        }
+        t.onDataReceived = { [weak self] data in
+            guard let self else { return }
+            guard let envelope = MessageEnvelope.decode(from: data) else {
+                print("MultipeerManager: envelope decode failed — possible desync")
+                return
+            }
+            self.onEnvelopeReceived?(envelope)
         }
     }
 
-    nonisolated func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        print("MultipeerManager: Failed to browse — \(error.localizedDescription)")
-        Task { @MainActor in
-            self.connectionState = .notConnected
-        }
+    private func cleanup() {
+        // Nil upper-layer callbacks before disconnecting so async transport
+        // events fired during teardown are silently dropped.
+        onEnvelopeReceived = nil
+        onDisconnected = nil
+        onPeerConnected = nil
+        // Silence transport callbacks too.
+        transport?.onPeerConnected = nil
+        transport?.onPeerDisconnected = nil
+        transport?.onDataReceived = nil
+        transport?.onPeerDiscovered = nil
+        transport?.disconnect()
+        transport = nil
+        discoveredPeers = []
+        connectedPeerName = nil
     }
 }

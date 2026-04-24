@@ -157,6 +157,16 @@ struct LobbyView: View {
 
     private var actionButtons: some View {
         VStack(spacing: 16) {
+            Picker("連線方式", selection: $multipeerManager.connectionMode) {
+                ForEach(ConnectionMode.allCases, id: \.self) { mode in
+                    Label(mode.rawValue,
+                          systemImage: mode == .wifi ? "wifi" : "airplane")
+                        .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(!canChangeMode)
+
             Button {
                 multipeerManager.hostGame()
             } label: {
@@ -186,6 +196,11 @@ struct LobbyView: View {
             }
         }
         .padding(.horizontal, 32)
+    }
+
+    private var canChangeMode: Bool {
+        multipeerManager.connectionState == .notConnected ||
+        multipeerManager.connectionState == .disconnected
     }
 }
 
