@@ -8,7 +8,7 @@
 import SwiftUI
 
 @Observable
-class GomokuEngine: GameEngine {
+final class GomokuEngine: GameEngine {
 
     // MARK: - Identity
 
@@ -81,6 +81,7 @@ class GomokuEngine: GameEngine {
     func confirmMove() {
         guard let move = pendingMove else { return }
         pendingMove = nil
+        SoundManager.shared.play(.placePiece)
         executePlacement(row: move.row, col: move.col)
     }
 
@@ -113,6 +114,7 @@ class GomokuEngine: GameEngine {
             return
         }
         expectedRecvSeq &+= 1
+        SoundManager.shared.play(.opponentMove)
         _ = model.placePiece(row: move.row, col: move.col)
     }
 
@@ -138,6 +140,14 @@ class GomokuEngine: GameEngine {
             self.rules = decoded
             self.model = GomokuModel(rules: decoded)
         }
+    }
+
+    func updateRules(_ newRules: GomokuRules) {
+        rules = newRules
+        model = GomokuModel(rules: newRules)
+        pendingMove = nil
+        nextSendSeq = 1
+        expectedRecvSeq = 1
     }
 
     // MARK: - View Factory

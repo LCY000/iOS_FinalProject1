@@ -78,6 +78,7 @@ struct ChatOverlayView: View {
             .padding(.bottom, 6)
         }
         .animation(.spring(duration: 0.3), value: chatManager.toastMessage != nil)
+        .hapticFeedback(.selection, trigger: chatManager.toastMessage)
         .sheet(isPresented: $showChatSheet) {
             chatSheet
         }
@@ -179,7 +180,7 @@ struct ChatOverlayView: View {
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(message.isFromMe ? Color.blue : Color.gray.opacity(0.2))
+                        .fill(message.isFromMe ? Color.chatBubbleMine : Color.gray.opacity(0.2))
                 )
                 .foregroundStyle(message.isFromMe ? .white : .primary)
             if !message.isFromMe { Spacer() }

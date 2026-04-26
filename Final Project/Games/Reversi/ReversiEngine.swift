@@ -8,7 +8,7 @@
 import SwiftUI
 
 @Observable
-class ReversiEngine: GameEngine {
+final class ReversiEngine: GameEngine {
 
     // MARK: - Identity
 
@@ -78,6 +78,7 @@ class ReversiEngine: GameEngine {
     func confirmMove() {
         guard let move = pendingMove else { return }
         pendingMove = nil
+        SoundManager.shared.play(.placePiece)
         executePlacement(row: move.row, col: move.col)
     }
 
@@ -108,6 +109,7 @@ class ReversiEngine: GameEngine {
             return
         }
         expectedRecvSeq &+= 1
+        SoundManager.shared.play(.opponentMove)
         _ = model.placePiece(row: move.row, col: move.col)
         checkAndSkipTurn()
     }
@@ -135,6 +137,14 @@ class ReversiEngine: GameEngine {
             self.rules = decoded
             self.model = ReversiModel(rules: decoded)
         }
+    }
+
+    func updateRules(_ newRules: ReversiRules) {
+        rules = newRules
+        model = ReversiModel(rules: newRules)
+        pendingMove = nil
+        nextSendSeq = 1
+        expectedRecvSeq = 1
     }
 
     // MARK: - View Factory
@@ -172,8 +182,8 @@ struct ReversiSettingsView: View {
             HStack(spacing: 8) {
                 ForEach(ReversiRules.supportedBoardSizes, id: \.self) { size in
                     Button {
-                        engine.rules.boardSize = size
-                        engine.model = ReversiModel(rules: engine.rules)
+                        var r = engine.rules; r.boardSize = size
+                        engine.updateRules(r)
                     } label: {
                         Text("\(size)×\(size)")
                             .font(.caption.bold())

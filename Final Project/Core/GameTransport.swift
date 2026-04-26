@@ -8,15 +8,50 @@
 
 import Foundation
 import MultipeerConnectivity
+import OSLog
+
+// MARK: - Transport Error
+
+enum TransportError: Equatable {
+    case bluetoothUnauthorized
+    case bluetoothUnsupported
+    case bluetoothOff
+    case wifiUnavailable
+    case unknown(String)
+
+    var userMessage: String {
+        switch self {
+        case .bluetoothUnauthorized:
+            return "需要藍牙權限才能使用此模式，請至「設定 > 隱私權 > 藍牙」開啟。"
+        case .bluetoothUnsupported:
+            return "此裝置不支援藍牙連線。"
+        case .bluetoothOff:
+            return "請先開啟藍牙。"
+        case .wifiUnavailable:
+            return "Wi-Fi 連線啟動失敗，請確認區域網路權限。"
+        case .unknown(let detail):
+            return "連線錯誤：\(detail)"
+        }
+    }
+}
+
+// MARK: - Discovered Peer
+
+struct DiscoveredPeer: Identifiable, Hashable {
+    /// Stable string ID within a session.
+    /// MPC: "mpc:<displayName>:<objectIdentifierHash>"; BLE: peripheral.identifier.uuidString
+    let id: String
+    let displayName: String
+}
 
 // MARK: - GameTransport Protocol
 
 protocol GameTransport: AnyObject {
     var onPeerDiscovered: ((DiscoveredPeer) -> Void)? { get set }
-    /// Passes the peer's display name.
     var onPeerConnected: ((String) -> Void)? { get set }
     var onPeerDisconnected: (() -> Void)? { get set }
     var onDataReceived: ((Data) -> Void)? { get set }
+    var onTransportError: ((TransportError) -> Void)? { get set }
 
     func startHosting()
     func startBrowsing()
@@ -34,6 +69,7 @@ final class MPCTransport: NSObject, GameTransport {
     var onPeerConnected: ((String) -> Void)?
     var onPeerDisconnected: (() -> Void)?
     var onDataReceived: ((Data) -> Void)?
+    var onTransportError: ((TransportError) -> Void)?
 
     // MARK: Private
     private let serviceType = "game-platform"
@@ -42,9 +78,10 @@ final class MPCTransport: NSObject, GameTransport {
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
     private var isConnected = false
+    private var peerIDByDiscoveredID: [String: MCPeerID] = [:]
 
     override init() {
-        self.myPeerID = MCPeerID(displayName: UIDevice.current.name)
+        self.myPeerID = MCPeerID(displayName: PlayerNameProvider.broadcastName)
         super.init()
     }
 
@@ -75,8 +112,8 @@ final class MPCTransport: NSObject, GameTransport {
     }
 
     func invite(_ peer: DiscoveredPeer) {
-        guard let session else { return }
-        browser?.invitePeer(peer.id, to: session, withContext: nil, timeout: 30)
+        guard let session, let peerID = peerIDByDiscoveredID[peer.id] else { return }
+        browser?.invitePeer(peerID, to: session, withContext: nil, timeout: 30)
     }
 
     func send(_ data: Data) {
@@ -84,7 +121,7 @@ final class MPCTransport: NSObject, GameTransport {
         do {
             try session.send(data, toPeers: session.connectedPeers, with: .reliable)
         } catch {
-            print("MPCTransport: send failed — \(error.localizedDescription)")
+            Logger.mpc.error("send failed — \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -94,6 +131,10 @@ final class MPCTransport: NSObject, GameTransport {
 
     // MARK: - Private
 
+    private func discoveredID(for peerID: MCPeerID) -> String {
+        "mpc:\(peerID.displayName):\(ObjectIdentifier(peerID).hashValue)"
+    }
+
     private func cleanupMC() {
         advertiser?.stopAdvertisingPeer()
         advertiser = nil
@@ -102,7 +143,8 @@ final class MPCTransport: NSObject, GameTransport {
         session?.disconnect()
         session = nil
         isConnected = false
-        myPeerID = MCPeerID(displayName: UIDevice.current.name)
+        peerIDByDiscoveredID.removeAll()
+        myPeerID = MCPeerID(displayName: PlayerNameProvider.broadcastName)
     }
 }
 
@@ -157,7 +199,7 @@ extension MPCTransport: MCNearbyServiceAdvertiserDelegate {
     }
 
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {
-        print("MPCTransport: failed to advertise — \(error.localizedDescription)")
+        Logger.mpc.error("failed to advertise — \(error.localizedDescription, privacy: .public)")
     }
 }
 
@@ -166,8 +208,11 @@ extension MPCTransport: MCNearbyServiceAdvertiserDelegate {
 extension MPCTransport: MCNearbyServiceBrowserDelegate {
 
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        let peer = DiscoveredPeer(id: peerID, displayName: peerID.displayName)
+        let id = self.discoveredID(for: peerID)
+        let peer = DiscoveredPeer(id: id, displayName: peerID.displayName)
         Task { @MainActor in
+            guard self.peerIDByDiscoveredID[id] == nil else { return }
+            self.peerIDByDiscoveredID[id] = peerID
             self.onPeerDiscovered?(peer)
         }
     }
@@ -175,6 +220,6 @@ extension MPCTransport: MCNearbyServiceBrowserDelegate {
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {}
 
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        print("MPCTransport: failed to browse — \(error.localizedDescription)")
+        Logger.mpc.error("failed to browse — \(error.localizedDescription, privacy: .public)")
     }
 }

@@ -29,7 +29,7 @@ struct GomokuCellView: View {
                 let hEnd = CGPoint(x: col == boardSize - 1 ? mid.x : size.width, y: mid.y)
                 hPath.move(to: hStart)
                 hPath.addLine(to: hEnd)
-                context.stroke(hPath, with: .color(.black.opacity(0.4)), lineWidth: 0.5)
+                context.stroke(hPath, with: .color(.primary.opacity(0.35)), lineWidth: 0.5)
 
                 // Vertical line
                 var vPath = Path()
@@ -37,20 +37,20 @@ struct GomokuCellView: View {
                 let vEnd = CGPoint(x: mid.x, y: row == boardSize - 1 ? mid.y : size.height)
                 vPath.move(to: vStart)
                 vPath.addLine(to: vEnd)
-                context.stroke(vPath, with: .color(.black.opacity(0.4)), lineWidth: 0.5)
+                context.stroke(vPath, with: .color(.primary.opacity(0.35)), lineWidth: 0.5)
             }
 
             // Star point (天元 and corner stars)
             if isStarPoint {
                 Circle()
-                    .fill(Color.black.opacity(0.5))
+                    .fill(Color.primary.opacity(0.5))
                     .frame(width: 5, height: 5)
             }
 
             // Pending preview stone
             if isPending {
                 Circle()
-                    .fill(pendingColor == .black ? Color.black.opacity(0.4) : Color.white.opacity(0.5))
+                    .fill(pendingColor == .black ? Color.pieceBlack.opacity(0.4) : Color.pieceWhite.opacity(0.5))
                     .padding(3)
                     .overlay(
                         Circle()
@@ -62,7 +62,7 @@ struct GomokuCellView: View {
             // Placed stone
             if cellState != .empty && !isPending {
                 Circle()
-                    .fill(cellState == .black ? Color.black : Color.white)
+                    .fill(cellState == .black ? Color.pieceBlack : Color.pieceWhite)
                     .padding(2)
                     .shadow(color: .black.opacity(0.3), radius: 1, x: 0.5, y: 0.5)
                     .overlay(

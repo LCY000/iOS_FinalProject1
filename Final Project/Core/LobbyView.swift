@@ -11,6 +11,8 @@ import SwiftUI
 struct LobbyView: View {
     @State private var multipeerManager = MultipeerManager()
     @State private var navigateToRoom = false
+    @State private var showNicknamePrompt = PlayerNameProvider.needsOnboarding
+    @State private var draftNickname: String = ""
 
     var body: some View {
         VStack(spacing: 24) {
@@ -123,6 +125,34 @@ struct LobbyView: View {
                 multipeerManager.disconnect()
             }
         }
+        .hapticFeedback(.connect, trigger: multipeerManager.connectionState == .connected)
+        .hapticFeedback(.disconnect, trigger: multipeerManager.transportError != nil)
+        .alert("設定暱稱", isPresented: $showNicknamePrompt) {
+            TextField("最多 12 字", text: $draftNickname)
+                .textInputAutocapitalization(.never)
+            Button("確定") {
+                let trimmed = String(draftNickname.prefix(12))
+                PlayerNameProvider.savedNickname = trimmed.isEmpty ? nil : trimmed
+            }
+            Button("使用匿名", role: .cancel) {}
+        } message: {
+            Text("此暱稱會顯示給對手看。")
+        }
+        .alert(
+            "藍牙連線問題",
+            isPresented: Binding(
+                get: { multipeerManager.transportError != nil },
+                set: { if !$0 { multipeerManager.transportError = nil } }
+            )
+        ) {
+            Button("確定", role: .cancel) {
+                multipeerManager.transportError = nil
+            }
+        } message: {
+            if let err = multipeerManager.transportError {
+                Text(err.userMessage)
+            }
+        }
     }
 
     // MARK: - Status Badge
@@ -156,7 +186,7 @@ struct LobbyView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.m) {
             Picker("連線方式", selection: $multipeerManager.connectionMode) {
                 ForEach(ConnectionMode.allCases, id: \.self) { mode in
                     Label(mode.rawValue,
@@ -171,31 +201,17 @@ struct LobbyView: View {
                 multipeerManager.hostGame()
             } label: {
                 Label("建立房間", systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.title3.bold())
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.blue)
-                    )
-                    .foregroundStyle(.white)
             }
+            .buttonStyle(PrimaryActionButtonStyle(tint: .blue))
 
             Button {
                 multipeerManager.joinGame()
             } label: {
                 Label("尋找房間", systemImage: "magnifyingglass")
-                    .font(.title3.bold())
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.blue, lineWidth: 2)
-                    )
-                    .foregroundStyle(.blue)
             }
+            .buttonStyle(SecondaryActionButtonStyle(tint: .blue))
         }
-        .padding(.horizontal, 32)
+        .padding(.horizontal, Spacing.xl)
     }
 
     private var canChangeMode: Bool {

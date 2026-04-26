@@ -21,8 +21,8 @@ struct GomokuSettingsView: View {
                 HStack(spacing: 8) {
                     ForEach(GomokuRules.supportedBoardSizes, id: \.self) { size in
                         Button {
-                            engine.rules.boardSize = size
-                            engine.model = GomokuModel(rules: engine.rules)
+                            var r = engine.rules; r.boardSize = size
+                            engine.updateRules(r)
                         } label: {
                             Text("\(size)×\(size)")
                                 .font(.caption.bold())
@@ -56,15 +56,15 @@ struct GomokuSettingsView: View {
                 isEnabled: Binding(
                     get: { engine.rules.doubleThreeEnabled },
                     set: { newValue in
-                        engine.rules.doubleThreeEnabled = newValue
-                        engine.model = GomokuModel(rules: engine.rules)
+                        var r = engine.rules; r.doubleThreeEnabled = newValue
+                        engine.updateRules(r)
                     }
                 ),
                 target: Binding(
                     get: { engine.rules.doubleThreeTarget },
                     set: { newValue in
-                        engine.rules.doubleThreeTarget = newValue
-                        engine.model = GomokuModel(rules: engine.rules)
+                        var r = engine.rules; r.doubleThreeTarget = newValue
+                        engine.updateRules(r)
                     }
                 )
             )
@@ -76,15 +76,15 @@ struct GomokuSettingsView: View {
                 isEnabled: Binding(
                     get: { engine.rules.doubleFourEnabled },
                     set: { newValue in
-                        engine.rules.doubleFourEnabled = newValue
-                        engine.model = GomokuModel(rules: engine.rules)
+                        var r = engine.rules; r.doubleFourEnabled = newValue
+                        engine.updateRules(r)
                     }
                 ),
                 target: Binding(
                     get: { engine.rules.doubleFourTarget },
                     set: { newValue in
-                        engine.rules.doubleFourTarget = newValue
-                        engine.model = GomokuModel(rules: engine.rules)
+                        var r = engine.rules; r.doubleFourTarget = newValue
+                        engine.updateRules(r)
                     }
                 )
             )
@@ -96,15 +96,15 @@ struct GomokuSettingsView: View {
                 isEnabled: Binding(
                     get: { engine.rules.overlineEnabled },
                     set: { newValue in
-                        engine.rules.overlineEnabled = newValue
-                        engine.model = GomokuModel(rules: engine.rules)
+                        var r = engine.rules; r.overlineEnabled = newValue
+                        engine.updateRules(r)
                     }
                 ),
                 target: Binding(
                     get: { engine.rules.overlineTarget },
                     set: { newValue in
-                        engine.rules.overlineTarget = newValue
-                        engine.model = GomokuModel(rules: engine.rules)
+                        var r = engine.rules; r.overlineTarget = newValue
+                        engine.updateRules(r)
                     }
                 )
             )
@@ -145,7 +145,7 @@ struct GomokuSettingsView: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: Radius.s)
                 .fill(isEnabled.wrappedValue
                       ? Color.blue.opacity(0.05) : Color.clear)
         )

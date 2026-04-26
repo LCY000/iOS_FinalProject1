@@ -89,27 +89,18 @@ struct ContentView: View {
     }
 
     private func modeCard(icon: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Spacing.m) {
             Image(systemName: icon)
                 .font(.system(size: 28))
                 .frame(width: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.title3.bold())
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(title).font(.appButton)
+                Text(subtitle).font(.appCaption).foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundStyle(.secondary)
+            Image(systemName: "chevron.right").foregroundStyle(.secondary)
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
-        )
+        .card(radius: Radius.l, elevation: .mid, padding: Spacing.l)
     }
 }
 
@@ -140,7 +131,7 @@ struct GamePickerView: View {
                         selectedEngine = engine
                         showSettings = true
                     } label: {
-                        VStack(spacing: 12) {
+                        VStack(spacing: Spacing.s) {
                             Image(systemName: game.icon)
                                 .font(.system(size: 36))
                                 .foregroundStyle(
@@ -151,17 +142,10 @@ struct GamePickerView: View {
                                     )
                                 )
                                 .frame(height: 44)
-
-                            Text(game.title)
-                                .font(.title3.bold())
+                            Text(game.title).font(.appButton)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
-                        )
+                        .card(radius: Radius.l, elevation: .mid, padding: Spacing.l)
                     }
                     .foregroundStyle(.primary)
                 }

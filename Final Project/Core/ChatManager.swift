@@ -13,7 +13,7 @@
 import SwiftUI
 
 @Observable
-class ChatManager {
+final class ChatManager {
     // MARK: State
     var messages: [ChatMessage] = []
 

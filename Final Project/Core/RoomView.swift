@@ -60,17 +60,10 @@ struct RoomView: View {
                         session.hostStartGame(game: game, settingsEngine: settingsEngine)
                     } label: {
                         Text("開始遊戲")
-                            .font(.title2.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color.green)
-                            )
-                            .foregroundStyle(.white)
                     }
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 20)
+                    .buttonStyle(PrimaryActionButtonStyle(tint: .green))
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.bottom, Spacing.l)
                 }
             }
             .animatedEntrance()
@@ -113,13 +106,13 @@ struct RoomView: View {
                         .overlay(
                             ChatOverlayView(chatManager: session.chatManager)
                         )
-                        .alert("對手想再來一局", isPresented: $session.showRestartVoteAlert) {
+                        .alert("對手想再來一局", isPresented: Bindable(session.rematchVoting).showVoteAlert) {
                             Button("同意") { session.respondToRestart(accepted: true) }
                             Button("拒絕", role: .cancel) { session.respondToRestart(accepted: false) }
                         } message: {
                             Text("對手想重新開始這局遊戲，是否同意？")
                         }
-                        .alert("對手拒絕了", isPresented: $session.restartRejectedAlert) {
+                        .alert("對手拒絕了", isPresented: Bindable(session.rematchVoting).rejectedAlert) {
                             Button("OK", role: .cancel) {}
                         } message: {
                             Text("對手不想再來一局。")
@@ -153,6 +146,14 @@ struct RoomView: View {
         } message: {
             Text("與對手的連線已中斷，請返回大廳重新配對。")
         }
+        .alert("無法開始遊戲", isPresented: $session.showStartGameErrorAlert) {
+            Button("返回大廳") {
+                multipeerManager.disconnect()
+                dismiss()
+            }
+        } message: {
+            Text(session.startGameErrorMessage)
+        }
         .alert("同步錯誤", isPresented: $session.showDesyncAlert) {
             Button("返回大廳") {
                 session.gameStarted = false
@@ -163,13 +164,13 @@ struct RoomView: View {
         }
         // Rematch alerts also live on RoomView so they trigger even when the
         // user is on the room screen (no game pushed yet).
-        .alert("對手想再來一局", isPresented: roomLevelRestartVoteBinding()) {
+        .alert("對手想再來一局", isPresented: roomLevelVoteBinding()) {
             Button("同意") { session.respondToRestart(accepted: true) }
             Button("拒絕", role: .cancel) { session.respondToRestart(accepted: false) }
         } message: {
             Text("對手想重新開始這局遊戲，是否同意？")
         }
-        .alert("對手拒絕了", isPresented: roomLevelRestartRejectedBinding()) {
+        .alert("對手拒絕了", isPresented: roomLevelRejectedBinding()) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("對手不想再來一局。")
@@ -187,6 +188,9 @@ struct RoomView: View {
         } message: {
             Text("離開後會與對方中斷連線，確定嗎？")
         }
+        .hapticFeedback(.connect, trigger: multipeerManager.connectionState == .connected)
+        .hapticFeedback(.disconnect, trigger: session.showDisconnectAlert)
+        .hapticFeedback(.disconnect, trigger: session.showDesyncAlert)
     }
 
     // MARK: - Room-Level Alert Bindings
@@ -197,23 +201,23 @@ struct RoomView: View {
     // so they only fire when gameStarted is false; the in-game alerts
     // (inside navigationDestination) handle the other case.
 
-    private func roomLevelRestartVoteBinding() -> Binding<Bool> {
+    private func roomLevelVoteBinding() -> Binding<Bool> {
         Binding(
-            get: { session.showRestartVoteAlert && !session.gameStarted },
+            get: { session.rematchVoting.showVoteAlert && !session.gameStarted },
             set: { newValue in
                 if !newValue && !session.gameStarted {
-                    session.showRestartVoteAlert = false
+                    session.rematchVoting.showVoteAlert = false
                 }
             }
         )
     }
 
-    private func roomLevelRestartRejectedBinding() -> Binding<Bool> {
+    private func roomLevelRejectedBinding() -> Binding<Bool> {
         Binding(
-            get: { session.restartRejectedAlert && !session.gameStarted },
+            get: { session.rematchVoting.rejectedAlert && !session.gameStarted },
             set: { newValue in
                 if !newValue && !session.gameStarted {
-                    session.restartRejectedAlert = false
+                    session.rematchVoting.rejectedAlert = false
                 }
             }
         )
@@ -354,7 +358,7 @@ private struct RematchWaitingOverlay: View {
     @Bindable var session: GameSessionCoordinator
 
     var body: some View {
-        if session.waitingForRestartResponse {
+        if session.rematchVoting.waitingForResponse {
             VStack(spacing: 12) {
                 ProgressView()
                     .scaleEffect(1.2)

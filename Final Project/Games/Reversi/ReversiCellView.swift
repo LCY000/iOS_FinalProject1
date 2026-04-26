@@ -15,7 +15,20 @@ struct ReversiCellView: View {
     let isPending: Bool     // preview mode: semi-transparent piece
     let pendingColor: CellState  // color of the pending piece
     let isLastMove: Bool
+    let row: Int
+    let col: Int
     let action: () -> Void
+
+    private var accessibilityDescription: String {
+        if isPending { return "第\(row+1)行第\(col+1)列，待確認落子" }
+        switch cellState {
+        case .black: return "第\(row+1)行第\(col+1)列，黑棋"
+        case .white: return "第\(row+1)行第\(col+1)列，白棋"
+        case .empty: return isValidMove
+            ? "第\(row+1)行第\(col+1)列，可落子"
+            : "第\(row+1)行第\(col+1)列，空格"
+        }
+    }
 
     // Animation state
     @State private var flipDegrees: Double = 0
@@ -27,7 +40,7 @@ struct ReversiCellView: View {
             ZStack {
                 // Green board cell
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(red: 0.0, green: 0.55, blue: 0.27))
+                    .fill(Color.reversiBoard)
                     .aspectRatio(1, contentMode: .fit)
 
                 // Cell border
@@ -36,15 +49,15 @@ struct ReversiCellView: View {
 
                 // Valid move hint
                 if isValidMove && cellState == .empty && !isPending {
-                    Circle()
-                        .fill(Color.white.opacity(0.3))
-                        .frame(width: 14, height: 14)
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 12, weight: .light))
+                        .foregroundStyle(Color.white.opacity(0.5))
                 }
 
                 // Pending preview piece (semi-transparent)
                 if isPending {
                     Circle()
-                        .fill(pendingColor == .black ? Color.black.opacity(0.4) : Color.white.opacity(0.5))
+                        .fill(pendingColor == .black ? Color.pieceBlack.opacity(0.4) : Color.pieceWhite.opacity(0.5))
                         .padding(4)
                         .overlay(
                             Circle()
@@ -56,7 +69,7 @@ struct ReversiCellView: View {
                 // Placed piece
                 if displayedState != .empty && !isPending {
                     Circle()
-                        .fill(displayedState == .black ? Color.black : Color.white)
+                        .fill(displayedState == .black ? Color.pieceBlack : Color.pieceWhite)
                         .padding(4)
                         .shadow(color: .black.opacity(0.4), radius: 2, x: 1, y: 1)
                         .rotation3DEffect(
@@ -77,6 +90,7 @@ struct ReversiCellView: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityDescription)
         .onAppear {
             displayedState = cellState
         }
@@ -109,10 +123,10 @@ struct ReversiCellView: View {
 
 #Preview {
     HStack(spacing: 4) {
-        ReversiCellView(cellState: .empty, isValidMove: false, isPending: false, pendingColor: .empty, isLastMove: false, action: {})
-        ReversiCellView(cellState: .empty, isValidMove: true, isPending: false, pendingColor: .empty, isLastMove: false, action: {})
-        ReversiCellView(cellState: .empty, isValidMove: false, isPending: true, pendingColor: .black, isLastMove: false, action: {})
-        ReversiCellView(cellState: .black, isValidMove: false, isPending: false, pendingColor: .empty, isLastMove: true, action: {})
+        ReversiCellView(cellState: .empty, isValidMove: false, isPending: false, pendingColor: .empty, isLastMove: false, row: 0, col: 0, action: {})
+        ReversiCellView(cellState: .empty, isValidMove: true, isPending: false, pendingColor: .empty, isLastMove: false, row: 0, col: 1, action: {})
+        ReversiCellView(cellState: .empty, isValidMove: false, isPending: true, pendingColor: .black, isLastMove: false, row: 0, col: 2, action: {})
+        ReversiCellView(cellState: .black, isValidMove: false, isPending: false, pendingColor: .empty, isLastMove: true, row: 0, col: 3, action: {})
     }
     .padding()
 }

@@ -16,7 +16,7 @@
 
 import Foundation
 import CoreBluetooth
-import MultipeerConnectivity
+import OSLog
 
 // MARK: - UUIDs
 
@@ -37,6 +37,7 @@ final class BluetoothTransport: NSObject, GameTransport {
     var onPeerConnected:     ((String) -> Void)?
     var onPeerDisconnected:  (() -> Void)?
     var onDataReceived:      ((Data) -> Void)?
+    var onTransportError:    ((TransportError) -> Void)?
 
     // MARK: Role
     private var role: BTRole = .none
@@ -57,8 +58,8 @@ final class BluetoothTransport: NSObject, GameTransport {
     private var guestWriteInFlight: Bool = false
     private var pendingWriteRetry:  Data?
 
-    // MARK: Peer Lookup (fake MCPeerID → real CBPeripheral)
-    private var peripheralByID: [ObjectIdentifier: CBPeripheral] = [:]
+    // MARK: Peer Lookup (peripheral UUID string → CBPeripheral)
+    private var peripheralByID: [String: CBPeripheral] = [:]
 
     // MARK: Reassembly
     private var receiveBuffer   = Data()
@@ -84,7 +85,7 @@ final class BluetoothTransport: NSObject, GameTransport {
     }
 
     func invite(_ peer: DiscoveredPeer) {
-        guard let peripheral = peripheralByID[ObjectIdentifier(peer.id)],
+        guard let peripheral = peripheralByID[peer.id],
               let cm = centralManager else { return }
         connectedPeripheral = peripheral
         peripheral.delegate = self
@@ -139,13 +140,8 @@ final class BluetoothTransport: NSObject, GameTransport {
     // MARK: - Host Send
 
     private func sendAsHost(_ data: Data) {
-        guard let pm = peripheralManager, let char = hostToGuestChar else { return }
-        let mtu: Int
-        if let central = subscribedCentral {
-            mtu = pm.maximumUpdateValueLength(for: central)
-        } else {
-            mtu = 512
-        }
+        guard peripheralManager != nil, hostToGuestChar != nil else { return }
+        let mtu = subscribedCentral?.maximumUpdateValueLength ?? 512
         for packet in frame(data, mtu: mtu) {
             hostSendQueue.append(packet)
         }
@@ -178,12 +174,10 @@ final class BluetoothTransport: NSObject, GameTransport {
     }
 
     private func drainGuestQueue() {
+        if guestWriteInFlight { return }
         guard let peripheral = connectedPeripheral,
               let char = guestToHostCharRef,
-              !guestSendQueue.isEmpty else {
-            guestWriteInFlight = false
-            return
-        }
+              !guestSendQueue.isEmpty else { return }
         let packet = guestSendQueue.removeFirst()
         pendingWriteRetry = packet
         guestWriteInFlight = true
@@ -195,7 +189,7 @@ final class BluetoothTransport: NSObject, GameTransport {
     /// Prepends a 4-byte big-endian length header to `data` and splits into
     /// MTU-sized chunks. Single-packet messages are by far the common case
     /// for board games (moves + chat << 185 bytes).
-    private func frame(_ data: Data, mtu: Int) -> [Data] {
+    func frame(_ data: Data, mtu: Int) -> [Data] {
         let effective = max(mtu, 20)
         let header = withUnsafeBytes(of: UInt32(data.count).bigEndian) { Data($0) }
         let combined = header + data
@@ -213,41 +207,53 @@ final class BluetoothTransport: NSObject, GameTransport {
 
     // MARK: - Reassembly (shared by both roles)
 
-    private func handleIncoming(_ chunk: Data) {
-        if receiveBuffer.isEmpty && expectedLength == 0 {
-            guard chunk.count >= 4 else {
-                print("BluetoothTransport: chunk too short for length header")
-                return
-            }
-            let length = Int(chunk[0]) << 24 | Int(chunk[1]) << 16
-                       | Int(chunk[2]) << 8  | Int(chunk[3])
-            guard length > 0 && length <= 64 * 1024 else {
-                print("BluetoothTransport: invalid frame length \(length), discarding")
-                return
-            }
-            expectedLength = length
-            receiveBuffer.append(chunk.dropFirst(4))
-            startReassemblyTimeout()
-        } else {
-            receiveBuffer.append(chunk)
-        }
+    func handleIncoming(_ chunk: Data) {
+        receiveBuffer.append(chunk)
+        parseBuffer()
+    }
 
-        if receiveBuffer.count >= expectedLength {
+    private func parseBuffer() {
+        while true {
+            if expectedLength == 0 {
+                guard receiveBuffer.count >= 4 else {
+                    if !receiveBuffer.isEmpty { startReassemblyTimeout() }
+                    return
+                }
+                let length = Int(receiveBuffer[receiveBuffer.startIndex]) << 24
+                           | Int(receiveBuffer[receiveBuffer.startIndex + 1]) << 16
+                           | Int(receiveBuffer[receiveBuffer.startIndex + 2]) << 8
+                           | Int(receiveBuffer[receiveBuffer.startIndex + 3])
+                guard length > 0 && length <= 64 * 1024 else {
+                    Logger.bluetooth.warning("invalid frame length \(length, privacy: .public), discarding")
+                    resetBuffer()
+                    return
+                }
+                expectedLength = length
+                receiveBuffer.removeFirst(4)
+                startReassemblyTimeout()
+            }
+
+            guard receiveBuffer.count >= expectedLength else { return }
+
             let message = Data(receiveBuffer.prefix(expectedLength))
-            resetBuffer()
+            receiveBuffer.removeFirst(expectedLength)
+            expectedLength = 0
+            reassemblyTimeoutTask?.cancel()
+            reassemblyTimeoutTask = nil
             onDataReceived?(message)
         }
     }
 
     private func startReassemblyTimeout() {
         reassemblyTimeoutTask?.cancel()
-        reassemblyTimeoutTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        reassemblyTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            await MainActor.run { [weak self] in
-                print("BluetoothTransport: reassembly timeout — resetting buffer")
-                self?.resetBuffer()
-            }
+            // Only reset if we are still mid-reassembly; a completed message
+            // or an explicit resetBuffer() call would have cleared these.
+            guard let self, self.expectedLength > 0 || !self.receiveBuffer.isEmpty else { return }
+            Logger.bluetooth.warning("reassembly timeout — resetting buffer")
+            self.resetBuffer()
         }
     }
 
@@ -265,8 +271,23 @@ extension BluetoothTransport: CBPeripheralManagerDelegate {
 
     nonisolated func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         Task { @MainActor in
-            guard peripheral.state == .poweredOn else { return }
-            self.setupAndAdvertise()
+            switch peripheral.state {
+            case .poweredOn:
+                self.setupAndAdvertise()
+            case .unauthorized:
+                self.onTransportError?(.bluetoothUnauthorized)
+            case .unsupported:
+                self.onTransportError?(.bluetoothUnsupported)
+            case .poweredOff:
+                if self.subscribedCentral != nil {
+                    self.onPeerDisconnected?()
+                }
+                self.onTransportError?(.bluetoothOff)
+            case .resetting, .unknown:
+                break
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -297,11 +318,11 @@ extension BluetoothTransport: CBPeripheralManagerDelegate {
     nonisolated func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         Task { @MainActor in
             guard error == nil else {
-                print("BluetoothTransport: didAdd service error — \(error!.localizedDescription)")
+                Logger.bluetooth.error("didAdd service error — \(error!.localizedDescription, privacy: .public)")
                 return
             }
             let suffix = UUID().uuidString.prefix(6)
-            let name = "\(UIDevice.current.name)｜\(suffix)"
+            let name = "\(PlayerNameProvider.broadcastName)｜\(suffix)"
             self.peripheralManager?.startAdvertising([
                 CBAdvertisementDataServiceUUIDsKey: [kServiceUUID],
                 CBAdvertisementDataLocalNameKey:    name
@@ -325,6 +346,8 @@ extension BluetoothTransport: CBPeripheralManagerDelegate {
         Task { @MainActor in
             guard characteristic.uuid == kHostToGuestCharUUID else { return }
             self.resetBuffer()
+            self.hostSendQueue.removeAll()
+            self.subscribedCentral = nil
             self.onPeerDisconnected?()
         }
     }
@@ -353,25 +376,38 @@ extension BluetoothTransport: CBCentralManagerDelegate {
 
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         Task { @MainActor in
-            guard central.state == .poweredOn else { return }
-            central.scanForPeripherals(
-                withServices: [kServiceUUID],
-                options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
-            )
+            switch central.state {
+            case .poweredOn:
+                central.scanForPeripherals(
+                    withServices: [kServiceUUID],
+                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+                )
+            case .unauthorized:
+                self.onTransportError?(.bluetoothUnauthorized)
+            case .unsupported:
+                self.onTransportError?(.bluetoothUnsupported)
+            case .poweredOff:
+                if self.connectedPeripheral != nil {
+                    self.onPeerDisconnected?()
+                }
+                self.onTransportError?(.bluetoothOff)
+            case .resetting, .unknown:
+                break
+            @unknown default:
+                break
+            }
         }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         Task { @MainActor in
+            let id = peripheral.identifier.uuidString
+            guard self.peripheralByID[id] == nil else { return }
             let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
                 ?? peripheral.name
                 ?? "未知裝置"
-            let fakePeerID = MCPeerID(displayName: name)
-            // Guard against duplicate discovers of the same peripheral.
-            let key = ObjectIdentifier(fakePeerID)
-            guard self.peripheralByID[key] == nil else { return }
-            self.peripheralByID[key] = peripheral
-            let peer = DiscoveredPeer(id: fakePeerID, displayName: name)
+            self.peripheralByID[id] = peripheral
+            let peer = DiscoveredPeer(id: id, displayName: name)
             self.onPeerDiscovered?(peer)
         }
     }
@@ -395,7 +431,7 @@ extension BluetoothTransport: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         Task { @MainActor in
-            print("BluetoothTransport: failed to connect — \(error?.localizedDescription ?? "unknown")")
+            Logger.bluetooth.error("failed to connect — \(error?.localizedDescription ?? "unknown", privacy: .public)")
             self.onPeerDisconnected?()
         }
     }
@@ -454,13 +490,13 @@ extension BluetoothTransport: CBPeripheralDelegate {
         Task { @MainActor in
             if error == nil {
                 self.pendingWriteRetry = nil
+                self.guestWriteInFlight = false
                 self.drainGuestQueue()
             } else if let retryData = self.pendingWriteRetry {
-                // Single retry — CoreBT already retried at L2CAP; one more at app level is enough.
                 self.pendingWriteRetry = nil
+                // guestWriteInFlight 仍 true — retry 也算 in-flight
                 peripheral.writeValue(retryData, for: characteristic, type: .withResponse)
             } else {
-                // Second consecutive failure: treat as disconnect.
                 self.guestWriteInFlight = false
                 self.onPeerDisconnected?()
             }

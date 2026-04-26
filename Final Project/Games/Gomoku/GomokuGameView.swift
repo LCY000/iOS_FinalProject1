@@ -10,6 +10,20 @@ import SwiftUI
 
 struct GomokuGameView: View {
     @Bindable var engine: GomokuEngine
+    @Environment(\.dismiss) private var dismiss
+
+    private var isLocalWinner: Bool {
+        guard let winner = engine.model.winner else { return false }
+        return engine.isMultiplayer ? winner == engine.localPlayer : true
+    }
+
+    private var winnerLabel: String {
+        guard let winner = engine.model.winner else { return "" }
+        if engine.isMultiplayer {
+            return winner == engine.localPlayer ? "你" : "對手"
+        }
+        return winner.displayName
+    }
 
     // Zoom state
     @State private var currentScale: CGFloat = 1.0
@@ -56,40 +70,46 @@ struct GomokuGameView: View {
         .animatedEntrance()
         .navigationTitle("五子棋")
         .navigationBarTitleDisplayMode(.inline)
+        .hapticFeedback(.selection, trigger: engine.pendingMove?.row ?? -1)
+        .hapticFeedback(.confirm, trigger: engine.lastMove?.row ?? -1)
+        .hapticFeedback(.opponentMove, trigger: engine.expectedRecvSeq)
+        .hapticFeedback(.win, trigger: engine.isGameOver)
+        .onChange(of: engine.isGameOver) { _, over in
+            if over { SoundManager.shared.play(.gameOver) }
+        }
+        .overlay {
+            if engine.isGameOver {
+                GameResultOverlay(
+                    isWinner: isLocalWinner,
+                    isDraw: engine.model.winner == nil,
+                    winnerLabel: winnerLabel,
+                    blackScore: engine.scores.black,
+                    whiteScore: engine.scores.white,
+                    onRematch: {
+                        if engine.isMultiplayer { engine.onRestartRequested?() } else { engine.reset() }
+                    },
+                    onLeave: { dismiss() }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: engine.isGameOver)
     }
 
     // MARK: - Board Content
 
     private var boardContent: some View {
-        VStack(spacing: 0) {
-            ForEach(0..<engine.rules.boardSize, id: \.self) { row in
-                HStack(spacing: 0) {
-                    ForEach(0..<engine.rules.boardSize, id: \.self) { col in
-                        let isPending = engine.pendingMove?.row == row && engine.pendingMove?.col == col
-                        let isLastMove = engine.lastMove?.row == row && engine.lastMove?.col == col
-
-                        GomokuCellView(
-                            cellState: engine.board[row][col],
-                            isPending: isPending,
-                            pendingColor: isPending ? CellState.from(engine.currentPlayer) : .empty,
-                            isLastMove: isLastMove,
-                            row: row,
-                            col: col,
-                            boardSize: engine.rules.boardSize
-                        )
-                        .frame(width: cellSize, height: cellSize)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            engine.handleTap(row: row, col: col)
-                        }
-                        .onLongPressGesture(minimumDuration: 0.3) {
-                            engine.handleTap(row: row, col: col)
-                        }
-                    }
-                }
-            }
-        }
-        .background(Color(red: 0.86, green: 0.72, blue: 0.52))
+        GomokuBoardCanvas(
+            board: engine.board,
+            boardSize: engine.rules.boardSize,
+            pendingMove: engine.pendingMove,
+            pendingColor: engine.pendingMove != nil ? CellState.from(engine.currentPlayer) : .empty,
+            lastMove: engine.lastMove,
+            cellSize: cellSize,
+            onTap: { row, col in engine.handleTap(row: row, col: col) }
+        )
+        .accessibilityLabel("五子棋棋盤，\(engine.rules.boardSize)路")
+        .background(Color.gomokuBoard)
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
     }
@@ -100,9 +120,9 @@ struct GomokuGameView: View {
         HStack(spacing: 24) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(Color.black)
+                    .fill(Color.pieceBlack)
                     .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                    .overlay(Circle().stroke(Color.pieceWhite, lineWidth: 1))
                 Text("\(engine.scores.black)")
                     .font(.title3.bold().monospacedDigit())
             }
@@ -111,7 +131,7 @@ struct GomokuGameView: View {
             .background(
                 Capsule()
                     .fill(engine.currentPlayer == .black
-                          ? Color.black.opacity(0.15) : Color.clear)
+                          ? Color.primary.opacity(0.12) : Color.clear)
             )
 
             Text("vs")
@@ -120,7 +140,7 @@ struct GomokuGameView: View {
 
             HStack(spacing: 8) {
                 Circle()
-                    .fill(Color.white)
+                    .fill(Color.pieceWhite)
                     .frame(width: 22, height: 22)
                     .overlay(Circle().stroke(Color.gray, lineWidth: 1))
                 Text("\(engine.scores.white)")
@@ -148,6 +168,7 @@ struct GomokuGameView: View {
                     Image(systemName: "minus.magnifyingglass")
                         .font(.title3)
                 }
+                .accessibilityLabel("縮小棋盤")
 
                 Text("\(Int(currentScale * 100))%")
                     .font(.caption.monospacedDigit())
@@ -159,6 +180,7 @@ struct GomokuGameView: View {
                     Image(systemName: "plus.magnifyingglass")
                         .font(.title3)
                 }
+                .accessibilityLabel("放大棋盤")
             }
 
             Spacer()
@@ -166,21 +188,13 @@ struct GomokuGameView: View {
             // Confirm/Cancel or Game Over (right side)
             if engine.isGameOver {
                 Button {
-                    if engine.isMultiplayer {
-                        engine.onRestartRequested?()
-                    } else {
-                        engine.reset()
-                    }
+                    if engine.isMultiplayer { engine.onRestartRequested?() } else { engine.reset() }
                 } label: {
                     Label("再來一局", systemImage: "arrow.counterclockwise")
-                        .font(.subheadline.bold())
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(Color.green))
-                        .foregroundStyle(.white)
                 }
+                .buttonStyle(PillButtonStyle(tint: .green))
             } else if engine.pendingMove != nil {
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.s) {
                     Button {
                         engine.cancelMove()
                     } label: {
@@ -188,17 +202,14 @@ struct GomokuGameView: View {
                             .font(.title2)
                             .foregroundStyle(.red)
                     }
+                    .accessibilityLabel("取消落子")
 
                     Button {
                         engine.confirmMove()
                     } label: {
                         Label("確認", systemImage: "checkmark")
-                            .font(.subheadline.bold())
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(Color.green))
-                            .foregroundStyle(.white)
                     }
+                    .buttonStyle(PillButtonStyle(tint: .green))
                 }
                 .transition(.scale.combined(with: .opacity))
             }

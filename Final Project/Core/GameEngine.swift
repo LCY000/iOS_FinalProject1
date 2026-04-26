@@ -45,9 +45,28 @@ enum MessageType: String, Codable {
 }
 
 struct MessageEnvelope: Codable {
+    static let currentVersion = 1
+
     let type: MessageType
     let gameType: String?   // e.g., "reversi", "gomoku"; nil for system-level messages
     let payload: Data       // game-specific JSON encoded data
+    let version: Int
+
+    init(type: MessageType, gameType: String? = nil, payload: Data) {
+        self.type = type
+        self.gameType = gameType
+        self.payload = payload
+        self.version = Self.currentVersion
+    }
+
+    // Backward-compatible decoding: old peers without `version` default to 1.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        type     = try c.decode(MessageType.self, forKey: .type)
+        gameType = try c.decodeIfPresent(String.self, forKey: .gameType)
+        payload  = try c.decode(Data.self, forKey: .payload)
+        version  = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+    }
 
     func encode() -> Data? {
         try? JSONEncoder().encode(self)
@@ -169,7 +188,7 @@ protocol GameEngine: AnyObject, Observable {
 
     // MARK: Settings
     /// Each game provides its own settings UI (shown in Room before game starts).
-    @ViewBuilder func makeSettingsView() -> AnyView
+    func makeSettingsView() -> AnyView
     /// Export current settings as Data to send to peer via .setRules envelope.
     func exportSettings() -> Data
     /// Apply settings received from peer.
@@ -189,5 +208,5 @@ protocol GameEngine: AnyObject, Observable {
     var onDesyncDetected: (() -> Void)? { get set }
 
     // MARK: View Factory
-    @ViewBuilder func makeGameView() -> AnyView
+    func makeGameView() -> AnyView
 }

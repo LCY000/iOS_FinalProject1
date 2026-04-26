@@ -9,7 +9,7 @@
 //
 
 import Foundation
-import MultipeerConnectivity
+import OSLog
 
 // MARK: - Connection Mode
 
@@ -29,20 +29,11 @@ enum ConnectionState: String {
     case disconnected = "連線已中斷"
 }
 
-// MARK: - Discovered Peer
-
-struct DiscoveredPeer: Identifiable, Hashable {
-    let id: MCPeerID
-    let displayName: String
-
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
-    static func == (lhs: DiscoveredPeer, rhs: DiscoveredPeer) -> Bool { lhs.id == rhs.id }
-}
-
 // MARK: - MultipeerManager
 
 @Observable
-class MultipeerManager: NSObject {
+@MainActor
+final class MultipeerManager: NSObject {
 
     // MARK: Public State
 
@@ -51,6 +42,7 @@ class MultipeerManager: NSObject {
     var connectedPeerName: String?
     var isHost: Bool = false
     var connectionMode: ConnectionMode = .wifi
+    var transportError: TransportError?
 
     // MARK: Callbacks (set by GameSessionCoordinator)
 
@@ -140,10 +132,17 @@ class MultipeerManager: NSObject {
         t.onDataReceived = { [weak self] data in
             guard let self else { return }
             guard let envelope = MessageEnvelope.decode(from: data) else {
-                print("MultipeerManager: envelope decode failed — possible desync")
+                Logger.session.warning("envelope decode failed — possible desync")
                 return
             }
             self.onEnvelopeReceived?(envelope)
+        }
+        t.onTransportError = { [weak self] error in
+            guard let self else { return }
+            self.transportError = error
+            self.connectionState = .notConnected
+            self.transport?.disconnect()
+            self.transport = nil
         }
     }
 
@@ -158,6 +157,7 @@ class MultipeerManager: NSObject {
         transport?.onPeerDisconnected = nil
         transport?.onDataReceived = nil
         transport?.onPeerDiscovered = nil
+        transport?.onTransportError = nil
         transport?.disconnect()
         transport = nil
         discoveredPeers = []

@@ -21,53 +21,32 @@ final class GameSessionCoordinator {
 
     let multipeerManager: MultipeerManager
     let chatManager = ChatManager()
+    let rematchVoting = RematchVoting()
 
     // MARK: - Navigation / Game State
 
-    /// Drives the navigationDestination that presents the active GameView.
     var gameStarted: Bool = false
-
-    /// The engine for the current game; nil before the host starts one or
-    /// before the guest receives the first .startGame envelope.
     var engine: (any GameEngine)?
 
     // MARK: - Leave Room
 
-    /// Set true when the local user taps the leave-room button. Suppresses the
-    /// generic "連線已中斷" alert because the local user already knows they left.
     var isIntentionalLeave: Bool = false
-
-    /// Shown when the peer disconnects unexpectedly (no explicit .peerLeftRoom).
     var showDisconnectAlert: Bool = false
 
-    // MARK: - Rematch Voting
+    // MARK: - Peer Left / Desync
 
-    /// Peer requested a rematch; show accept / reject alert to the local user.
-    var showRestartVoteAlert: Bool = false
-
-    /// Local user requested a rematch; show a waiting overlay until the peer
-    /// responds (or the peer leaves).
-    var waitingForRestartResponse: Bool = false
-
-    /// Peer rejected the local user's rematch request.
-    var restartRejectedAlert: Bool = false
-
-    // MARK: - Peer Left During Game
-
-    /// True once the peer has sent .peerLeftRoom (or the connection dropped).
-    /// Drives a non-blocking banner on the game screen; the local user can
-    /// keep viewing the board.
     var showPeerLeftBanner: Bool = false
-
-    // MARK: - Desync
-
-    /// Fired when a received MoveMessage.seq doesn't match expectedRecvSeq.
     var showDesyncAlert: Bool = false
+    var showStartGameErrorAlert: Bool = false
+    var startGameErrorMessage: String = ""
 
     // MARK: - Init
 
     init(multipeerManager: MultipeerManager) {
         self.multipeerManager = multipeerManager
+        rematchVoting.sendEnvelope = { [weak multipeerManager] envelope in
+            multipeerManager?.send(envelope: envelope)
+        }
     }
 
     // MARK: - Setup (called from RoomView.onAppear)
@@ -78,8 +57,15 @@ final class GameSessionCoordinator {
         multipeerManager.onEnvelopeReceived = { [weak self] envelope in
             self?.handleEnvelope(envelope)
         }
+        multipeerManager.onPeerConnected = {
+            SoundManager.shared.play(.connect)
+        }
         chatManager.onSendEnvelope = { [weak multipeerManager] envelope in
             multipeerManager?.send(envelope: envelope)
+        }
+        rematchVoting.onAccepted = { [weak self] in
+            self?.engine?.reset()
+            if !(self?.gameStarted ?? true) { self?.gameStarted = true }
         }
     }
 
@@ -90,8 +76,8 @@ final class GameSessionCoordinator {
     func handleConnectionStateChange(_ newState: ConnectionState) {
         guard newState == .disconnected || newState == .notConnected else { return }
 
-        // Any in-flight rematch request is now void.
-        waitingForRestartResponse = false
+        SoundManager.shared.play(.disconnect)
+        rematchVoting.reset()
 
         // Suppress the alert when:
         //   (a) the local user initiated the leave, or
@@ -120,8 +106,8 @@ final class GameSessionCoordinator {
         wireEngineCallbacks(newEngine)
 
         self.engine = newEngine
-        showPeerLeftBanner = false  // reset for the new game
-        restartRejectedAlert = false
+        showPeerLeftBanner = false
+        rematchVoting.reset()
 
         let settingsData = newEngine.exportSettings()
         let startInfo = StartGamePayload(gameType: game.gameType, settings: settingsData)
@@ -145,37 +131,26 @@ final class GameSessionCoordinator {
         gameStarted = true
     }
 
-    // MARK: - Rematch
+    // MARK: - Rematch (delegate to RematchVoting)
 
-    /// Called by the game engine's onRestartRequested callback.
     func requestRestart() {
-        guard !waitingForRestartResponse else { return }
         guard engine != nil else { return }
-        waitingForRestartResponse = true
-        let envelope = MessageEnvelope(type: .restartVote, gameType: nil, payload: Data())
-        multipeerManager.send(envelope: envelope)
+        rematchVoting.request()
     }
 
-    /// Called when the local user taps accept / reject in the rematch alert.
     func respondToRestart(accepted: Bool) {
-        let payload = RestartResponsePayload(accepted: accepted)
-        let envelope = MessageEnvelope(
-            type: .restartResponse,
-            gameType: nil,
-            payload: payload.toData()
-        )
-        multipeerManager.send(envelope: envelope)
-        if accepted {
-            engine?.reset()
-            if !gameStarted {
-                gameStarted = true
-            }
-        }
+        rematchVoting.respond(accepted: accepted)
     }
 
     // MARK: - Private
 
-    private func handleEnvelope(_ envelope: MessageEnvelope) {
+    func handleEnvelope(_ envelope: MessageEnvelope) {
+        guard envelope.version <= MessageEnvelope.currentVersion else {
+            startGameErrorMessage = "對手使用較新版本的應用程式，請更新後再試。"
+            showStartGameErrorAlert = true
+            multipeerManager.disconnect()
+            return
+        }
         switch envelope.type {
         case .startGame:
             handleGuestReceiveStartGame(envelope: envelope)
@@ -187,27 +162,14 @@ final class GameSessionCoordinator {
             chatManager.receiveEnvelope(envelope)
 
         case .restartVote:
-            // Ignore duplicate requests while one is already visible.
-            guard !showRestartVoteAlert else { return }
-            showRestartVoteAlert = true
+            rematchVoting.handleVoteReceived()
 
         case .restartResponse:
-            waitingForRestartResponse = false
-            if let payload = RestartResponsePayload.fromData(envelope.payload) {
-                if payload.accepted {
-                    engine?.reset()
-                    if !gameStarted {
-                        gameStarted = true
-                    }
-                } else {
-                    restartRejectedAlert = true
-                }
-            }
+            rematchVoting.handleResponseReceived(from: envelope.payload)
 
         case .peerLeftRoom:
             showPeerLeftBanner = true
-            // Cancel any in-flight rematch wait — the peer is gone.
-            waitingForRestartResponse = false
+            rematchVoting.reset()
 
         case .setRules, .gameOver:
             break
@@ -217,11 +179,20 @@ final class GameSessionCoordinator {
     private func handleGuestReceiveStartGame(envelope: MessageEnvelope) {
         guard let startInfo = try? JSONDecoder().decode(
                 StartGamePayload.self, from: envelope.payload
-              ),
-              let game = GameRegistry.availableGames.first(
+              ) else {
+            startGameErrorMessage = "收到的開始遊戲訊息無法解析，可能是雙方版本不同。請確認雙方使用相同版本後重試。"
+            showStartGameErrorAlert = true
+            multipeerManager.disconnect()
+            return
+        }
+        guard let game = GameRegistry.availableGames.first(
                 where: { $0.gameType == startInfo.gameType }
-              )
-        else { return }
+              ) else {
+            startGameErrorMessage = "對方選擇的遊戲（\(startInfo.gameType)）在此版本不存在，請更新 App。"
+            showStartGameErrorAlert = true
+            multipeerManager.disconnect()
+            return
+        }
 
         let newEngine = game.createEngine()
         newEngine.applySettings(data: startInfo.settings)
@@ -231,7 +202,7 @@ final class GameSessionCoordinator {
 
         self.engine = newEngine
         showPeerLeftBanner = false
-        restartRejectedAlert = false
+        rematchVoting.reset()
 
         pushGameScreen()
     }
