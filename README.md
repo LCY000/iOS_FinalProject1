@@ -1,6 +1,6 @@
 # Final Project - 離線多人棋盤對戰平台
 
-👉 **版本**: 0.3.0
+👉 **版本**: 0.4.0
 👉 **系統需求**: iOS 26.2+
 👉 **開發框架**: Swift / SwiftUI
 
@@ -61,7 +61,10 @@ Final Project/
 │   ├── PlayerNameProvider.swift     # 暱稱持久化
 │   ├── SoundManager.swift     # AudioToolbox 音效
 │   ├── Logger.swift           # OSLog（bluetooth/mpc/session/game）
-│   ├── GameResultOverlay.swift  # 全屏結果卡 + Confetti
+│   ├── GameResultOverlay.swift  # 全屏結果卡
+│   ├── ConfettiLayer.swift      # 彩帶動畫（GeometryReader + @State 穩定隨機值）
+│   ├── PeerLeftBanner.swift     # 對手離線橫幅
+│   ├── RematchWaitingOverlay.swift  # 等待再賽回應的半透明覆層
 │   ├── ChatManager.swift
 │   ├── LobbyView.swift
 │   └── RoomView.swift
@@ -83,3 +86,32 @@ Final Project/
 | `BluetoothStressTests` | 高吞吐量壓力（設定 `BT_STRESS_ENABLED=1` 環境變數後啟用） |
 
 執行：`⌘U`（需在 Xcode 建立 Unit Testing Bundle target 並加入測試檔案）
+
+## 📋 版本紀錄
+
+### v0.4.0 — 全面體檢
+- **安全性**：替換全部 `try!` 為 `(try? ...) ?? Data()`；所有 `print()` 改為 `Logger.session.debug()`；新增 `hasTransportError` computed property 消除 view body 內的 `Binding(get:set:)`
+- **棄用 API**：`overlay(_:)` → `overlay { }`；`.fill().stroke()` 鏈式寫法（iOS 17+）；`.scrollIndicators(.hidden)`；`ForEach(enumerated())`；Reversi 棋盤改用 flexible layout 取代 GeometryReader + position()
+- **設計一致性**：全面套用 `Spacing`/`Radius` token；快捷回覆 → `PillButtonStyle`；開始遊戲 → `PrimaryActionButtonStyle`；字型 → `appNumber`/`appCaption`
+- **彩帶修復**：修正三個疊加問題（GeometryReader 初始尺寸為 0、body 內計算隨機值造成閃跳、`rotationEffect` 需在 `offset` 前套用）
+- **拆檔**：`ConfettiLayer`、`PeerLeftBanner`、`RematchWaitingOverlay` 各自獨立成檔
+
+### v0.3.0 — 設計系統、BLE 強化、音效、Canvas
+- 建立完整設計 token 系統（Spacing / Radius / Elevation / Typography / ButtonStyles）
+- BLE 傳輸強化：4-byte 大端長度前置 + 逐包重組 + 2 秒超時重置
+- 新增 AudioToolbox 音效（落子 / 翻面 / 勝負 / 警告）
+- 五子棋棋盤改用單一 `Canvas` 渲染，效能大幅提升
+
+### v0.2.0 — 藍牙傳輸模式
+- 新增 `BluetoothTransport`（CoreBluetooth BLE）雙模式傳輸
+- 應用層 desync 偵測與自動重連
+
+### v0.1.0 — 大廳體驗與引擎架構
+- 修復多人大廳體驗問題
+- 強化 `GameEngine` 協議架構
+- 新增單元測試
+
+### v0.0.3 — 初始版本
+- 黑白棋（6–12 路）、五子棋（15–25 路）
+- `MultipeerConnectivity` 離線大廳與房間
+- 防誤觸落子確認、棋盤縮放、浮動聊天室
