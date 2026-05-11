@@ -43,6 +43,10 @@ final class MultipeerManager: NSObject {
     var isHost: Bool = false
     var connectionMode: ConnectionMode = .wifi
     var transportError: TransportError?
+    var hasTransportError: Bool {
+        get { transportError != nil }
+        set { if !newValue { transportError = nil } }
+    }
 
     // MARK: Callbacks (set by GameSessionCoordinator)
 

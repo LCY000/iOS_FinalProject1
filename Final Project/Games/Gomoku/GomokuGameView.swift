@@ -49,7 +49,7 @@ struct GomokuGameView: View {
                 .foregroundStyle(engine.isGameOver ? .orange : .primary)
 
             // MARK: - Zoomable Board
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
+            ScrollView([.horizontal, .vertical]) {
                 boardContent
                     .scaleEffect(currentScale)
                     .frame(
@@ -58,6 +58,7 @@ struct GomokuGameView: View {
                     )
                     .gesture(magnifyGesture)
             }
+            .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -117,37 +118,33 @@ struct GomokuGameView: View {
     // MARK: - Score Bar
 
     private var scoreBar: some View {
-        HStack(spacing: 24) {
-            HStack(spacing: 8) {
+        HStack(spacing: Spacing.l) {
+            HStack(spacing: Spacing.xs) {
                 Circle()
                     .fill(Color.pieceBlack)
+                    .stroke(Color.pieceWhite, lineWidth: 1)
                     .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(Color.pieceWhite, lineWidth: 1))
-                Text("\(engine.scores.black)")
-                    .font(.title3.bold().monospacedDigit())
+                Text("\(engine.scores.black)").font(.appNumber)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.xs)
             .background(
                 Capsule()
                     .fill(engine.currentPlayer == .black
                           ? Color.primary.opacity(0.12) : Color.clear)
             )
 
-            Text("vs")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text("vs").font(.appCaption).foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.xs) {
                 Circle()
                     .fill(Color.pieceWhite)
+                    .stroke(Color.gray, lineWidth: 1)
                     .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(Color.gray, lineWidth: 1))
-                Text("\(engine.scores.white)")
-                    .font(.title3.bold().monospacedDigit())
+                Text("\(engine.scores.white)").font(.appNumber)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.xs)
             .background(
                 Capsule()
                     .fill(engine.currentPlayer == .white

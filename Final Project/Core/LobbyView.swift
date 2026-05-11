@@ -6,6 +6,7 @@
 //  Players choose to Host or Browse, then connect → go to Room.
 //
 
+import OSLog
 import SwiftUI
 
 struct LobbyView: View {
@@ -102,7 +103,7 @@ struct LobbyView: View {
         }
         // Use onChange instead of callback — more reliable with SwiftUI lifecycle
         .onChange(of: multipeerManager.connectionState) { oldState, newState in
-            print("🔵 [Lobby] connectionState: \(oldState.rawValue) → \(newState.rawValue)")
+            Logger.session.debug("Lobby connectionState: \(oldState.rawValue) → \(newState.rawValue)")
             if newState == .connected && !navigateToRoom {
                 navigateToRoom = true
             }
@@ -140,10 +141,7 @@ struct LobbyView: View {
         }
         .alert(
             "藍牙連線問題",
-            isPresented: Binding(
-                get: { multipeerManager.transportError != nil },
-                set: { if !$0 { multipeerManager.transportError = nil } }
-            )
+            isPresented: Bindable(multipeerManager).hasTransportError
         ) {
             Button("確定", role: .cancel) {
                 multipeerManager.transportError = nil

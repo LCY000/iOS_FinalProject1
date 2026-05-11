@@ -85,7 +85,7 @@ struct MoveMessage: Codable {
     let seq: UInt32
 
     func toData() -> Data {
-        try! JSONEncoder().encode(self)
+        (try? JSONEncoder().encode(self)) ?? Data()
     }
 
     static func fromData(_ data: Data) -> MoveMessage? {
@@ -109,7 +109,7 @@ struct ChatMessage: Codable, Identifiable {
     }
 
     func toData() -> Data {
-        try! JSONEncoder().encode(self)
+        (try? JSONEncoder().encode(self)) ?? Data()
     }
 
     static func fromData(_ data: Data) -> ChatMessage? {
@@ -133,7 +133,7 @@ struct RestartResponsePayload: Codable {
     let accepted: Bool
 
     func toData() -> Data {
-        try! JSONEncoder().encode(self)
+        (try? JSONEncoder().encode(self)) ?? Data()
     }
 
     static func fromData(_ data: Data) -> RestartResponsePayload? {

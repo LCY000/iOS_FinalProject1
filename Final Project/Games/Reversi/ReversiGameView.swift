@@ -98,12 +98,12 @@ struct ReversiGameView: View {
     // MARK: - Score Bar
 
     private var scoreBar: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: Spacing.l) {
             HStack(spacing: Spacing.xs) {
                 Circle()
                     .fill(Color.pieceBlack)
+                    .stroke(Color.pieceWhite, lineWidth: 1)
                     .frame(width: 24, height: 24)
-                    .overlay(Circle().stroke(Color.pieceWhite, lineWidth: 1))
                 Text("\(engine.scores.black)").font(.appNumber)
             }
             .padding(.horizontal, Spacing.m)
@@ -118,8 +118,8 @@ struct ReversiGameView: View {
             HStack(spacing: Spacing.xs) {
                 Circle()
                     .fill(Color.pieceWhite)
+                    .stroke(Color.gray, lineWidth: 1)
                     .frame(width: 24, height: 24)
-                    .overlay(Circle().stroke(Color.gray, lineWidth: 1))
                 Text("\(engine.scores.white)").font(.appNumber)
             }
             .padding(.horizontal, Spacing.m)
@@ -174,38 +174,31 @@ struct ReversiGameView: View {
     // MARK: - Board Grid
 
     private var boardGrid: some View {
-        GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height)
-            let cellSize = size / CGFloat(engine.boardSize)
-
-            VStack(spacing: 0) {
-                ForEach(0..<engine.boardSize, id: \.self) { row in
-                    HStack(spacing: 0) {
-                        ForEach(0..<engine.boardSize, id: \.self) { col in
-                            let isPending = engine.pendingMove?.row == row && engine.pendingMove?.col == col
-                            let isLastMove = engine.lastMove?.row == row && engine.lastMove?.col == col
-                            ReversiCellView(
-                                cellState: engine.board[row][col],
-                                isValidMove: isValidMove(row: row, col: col),
-                                isPending: isPending,
-                                pendingColor: isPending ? CellState.from(engine.currentPlayer) : .empty,
-                                isLastMove: isLastMove,
-                                row: row,
-                                col: col,
-                                action: { engine.handleTap(row: row, col: col) }
-                            )
-                            .frame(width: cellSize, height: cellSize)
-                        }
+        VStack(spacing: 0) {
+            ForEach(0..<engine.boardSize, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<engine.boardSize, id: \.self) { col in
+                        let isPending = engine.pendingMove?.row == row && engine.pendingMove?.col == col
+                        let isLastMove = engine.lastMove?.row == row && engine.lastMove?.col == col
+                        ReversiCellView(
+                            cellState: engine.board[row][col],
+                            isValidMove: isValidMove(row: row, col: col),
+                            isPending: isPending,
+                            pendingColor: isPending ? CellState.from(engine.currentPlayer) : .empty,
+                            isLastMove: isLastMove,
+                            row: row,
+                            col: col,
+                            action: { engine.handleTap(row: row, col: col) }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }
-            .background(Color.boardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-            .frame(width: size, height: size)
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
         .aspectRatio(1, contentMode: .fit)
+        .background(Color.boardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
     }
 
     private func isValidMove(row: Int, col: Int) -> Bool {

@@ -111,26 +111,19 @@ struct ChatOverlayView: View {
                 Divider()
 
                 // Quick Replies
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Spacing.xs) {
                         ForEach(ChatManager.quickReplies, id: \.self) { reply in
-                            Button {
+                            Button(reply) {
                                 chatManager.sendMessage(reply)
-                            } label: {
-                                Text(reply)
-                                    .font(.caption.bold())
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule().fill(Color.blue.opacity(0.1))
-                                    )
-                                    .foregroundStyle(.blue)
                             }
+                            .buttonStyle(PillButtonStyle(tint: .blue))
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 6)
                 }
+                .scrollIndicators(.hidden)
 
                 // Input
                 chatInputBar

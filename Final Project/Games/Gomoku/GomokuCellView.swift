@@ -52,11 +52,11 @@ struct GomokuCellView: View {
                 Circle()
                     .fill(pendingColor == .black ? Color.pieceBlack.opacity(0.4) : Color.pieceWhite.opacity(0.5))
                     .padding(3)
-                    .overlay(
+                    .overlay {
                         Circle()
                             .stroke(Color.yellow, lineWidth: 2)
                             .padding(3)
-                    )
+                    }
             }
 
             // Placed stone
@@ -65,14 +65,14 @@ struct GomokuCellView: View {
                     .fill(cellState == .black ? Color.pieceBlack : Color.pieceWhite)
                     .padding(2)
                     .shadow(color: .black.opacity(0.3), radius: 1, x: 0.5, y: 0.5)
-                    .overlay(
+                    .overlay {
                         // Last move marker
-                        isLastMove ?
-                        Circle()
-                            .stroke(Color.red, lineWidth: 1.5)
-                            .padding(5)
-                        : nil
-                    )
+                        if isLastMove {
+                            Circle()
+                                .stroke(Color.red, lineWidth: 1.5)
+                                .padding(5)
+                        }
+                    }
             }
         }
     }

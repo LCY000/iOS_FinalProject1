@@ -103,9 +103,9 @@ struct RoomView: View {
                         .overlay(alignment: .center) {
                             RematchWaitingOverlay(session: session)
                         }
-                        .overlay(
+                        .overlay {
                             ChatOverlayView(chatManager: session.chatManager)
-                        )
+                        }
                         .alert("對手想再來一局", isPresented: Bindable(session.rematchVoting).showVoteAlert) {
                             Button("同意") { session.respondToRestart(accepted: true) }
                             Button("拒絕", role: .cancel) { session.respondToRestart(accepted: false) }
@@ -235,7 +235,7 @@ struct RoomView: View {
                 .font(.headline)
 
             if let peerName = multipeerManager.connectedPeerName {
-                Text("對手:\(peerName)")
+                Text("對手：\(peerName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -262,13 +262,13 @@ struct RoomView: View {
                 .font(.headline)
                 .padding(.horizontal, 24)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(Array(availableGames.enumerated()), id: \.element.id) { index, game in
+            ScrollView(.horizontal) {
+                HStack(spacing: Spacing.s) {
+                    ForEach(availableGames.enumerated(), id: \.element.id) { index, game in
                         Button {
                             selectedGameIndex = index
                         } label: {
-                            VStack(spacing: 8) {
+                            VStack(spacing: Spacing.xs) {
                                 Image(systemName: game.icon)
                                     .font(.system(size: 28))
                                 Text(game.title)
@@ -276,16 +276,16 @@ struct RoomView: View {
                             }
                             .frame(width: 100, height: 90)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: Radius.m)
                                     .fill(selectedGameIndex == index
                                           ? Color.blue.opacity(0.15)
                                           : Color.gray.opacity(0.1))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(selectedGameIndex == index
-                                                    ? Color.blue : Color.clear,
-                                                    lineWidth: 2)
-                                    )
+                                    .overlay {
+                                        if selectedGameIndex == index {
+                                            RoundedRectangle(cornerRadius: Radius.m)
+                                                .stroke(Color.blue, lineWidth: 2)
+                                        }
+                                    }
                             )
                         }
                         .foregroundStyle(selectedGameIndex == index ? .blue : .primary)
@@ -293,6 +293,7 @@ struct RoomView: View {
                 }
                 .padding(.horizontal, 24)
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -314,66 +315,6 @@ struct RoomView: View {
     private func updateSettingsEngine() {
         let game = availableGames[selectedGameIndex]
         settingsEngine = game.createEngine()
-    }
-}
-
-// MARK: - Peer Left Banner (in-game, non-blocking)
-
-private struct PeerLeftBanner: View {
-    @Bindable var session: GameSessionCoordinator
-
-    var body: some View {
-        if session.showPeerLeftBanner {
-            HStack(spacing: 8) {
-                Image(systemName: "person.slash.fill")
-                    .foregroundStyle(.orange)
-                Text("對方已離開房間")
-                    .font(.subheadline.bold())
-                Spacer(minLength: 8)
-                Button {
-                    session.showPeerLeftBanner = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
-            )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-}
-
-// MARK: - Rematch Waiting Overlay
-
-private struct RematchWaitingOverlay: View {
-    @Bindable var session: GameSessionCoordinator
-
-    var body: some View {
-        if session.rematchVoting.waitingForResponse {
-            VStack(spacing: 12) {
-                ProgressView()
-                    .scaleEffect(1.2)
-                Text("等待對手回應…")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(24)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.2), radius: 12)
-            )
-            .transition(.scale.combined(with: .opacity))
-        }
     }
 }
 

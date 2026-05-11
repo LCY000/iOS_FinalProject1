@@ -74,58 +74,12 @@ struct GameResultOverlay: View {
             Circle()
                 .fill(color)
                 .frame(width: 36, height: 36)
-                .overlay(stroke ? Circle().stroke(.gray, lineWidth: 1) : nil)
+                .overlay {
+                    if stroke { Circle().stroke(.gray, lineWidth: 1) }
+                }
             Text("\(score)").font(.appNumber)
             Text(label).font(.appCaption).foregroundStyle(.secondary)
         }
     }
 }
 
-// MARK: - Confetti
-
-private struct ConfettiLayer: View {
-    private let pieces = 60
-    @State private var animate = false
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                ForEach(0..<pieces, id: \.self) { i in
-                    ConfettiPiece(
-                        startX: CGFloat.random(in: 0...geo.size.width),
-                        endY: geo.size.height + 50,
-                        delay: Double(i) * 0.02,
-                        animate: animate
-                    )
-                }
-            }
-        }
-        .ignoresSafeArea()
-        .onAppear { animate = true }
-    }
-}
-
-private struct ConfettiPiece: View {
-    let startX: CGFloat
-    let endY: CGFloat
-    let delay: Double
-    let animate: Bool
-
-    private let colors: [Color] = [.red, .blue, .green, .yellow, .orange, .pink, .purple]
-    @State private var color: Color = .red
-    @State private var rotation = 0.0
-
-    var body: some View {
-        Rectangle()
-            .fill(color)
-            .frame(width: 8, height: 12)
-            .offset(x: startX - 4, y: animate ? endY : -50)
-            .rotationEffect(.degrees(rotation))
-            .animation(.linear(duration: Double.random(in: 2.5...4.5)).delay(delay), value: animate)
-            .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: rotation)
-            .onAppear {
-                color = colors.randomElement()!
-                rotation = Double.random(in: -360...360)
-            }
-    }
-}

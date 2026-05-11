@@ -5,19 +5,20 @@
 //  Created by ChengYou on 2026/3/23.
 //
 
+import OSLog
 import SwiftUI
 
 @main
 struct Final_ProjectApp: App {
     init() {
-        print("🟢 [App] Final_ProjectApp init")
+        Logger.session.debug("Final_ProjectApp init")
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .onAppear {
-                    print("🟢 [App] ContentView appeared")
+                    Logger.session.debug("ContentView appeared")
                 }
         }
     }

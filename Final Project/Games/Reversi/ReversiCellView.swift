@@ -59,11 +59,11 @@ struct ReversiCellView: View {
                     Circle()
                         .fill(pendingColor == .black ? Color.pieceBlack.opacity(0.4) : Color.pieceWhite.opacity(0.5))
                         .padding(4)
-                        .overlay(
+                        .overlay {
                             Circle()
                                 .stroke(Color.yellow, lineWidth: 2)
                                 .padding(4)
-                        )
+                        }
                 }
 
                 // Placed piece
@@ -76,16 +76,16 @@ struct ReversiCellView: View {
                             .degrees(flipDegrees),
                             axis: (x: 0, y: 1, z: 0)
                         )
-                        .overlay(
+                        .overlay {
                             // Last-move marker. Only show once any flip
                             // animation has settled (flipDegrees == 0) so it
                             // doesn't rotate with the piece.
-                            isLastMove && flipDegrees == 0
-                            ? Circle()
-                                .stroke(Color.red, lineWidth: 2)
-                                .padding(7)
-                            : nil
-                        )
+                            if isLastMove && flipDegrees == 0 {
+                                Circle()
+                                    .stroke(Color.red, lineWidth: 2)
+                                    .padding(7)
+                            }
+                        }
                 }
             }
         }

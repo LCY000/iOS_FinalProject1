@@ -39,8 +39,8 @@ struct ContentView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 60)
-                .padding(.bottom, 48)
+                .padding(.top, Spacing.xl + Spacing.l + Spacing.xxs)
+                .padding(.bottom, Spacing.xl + Spacing.m)
 
                 // MARK: - Mode Selection
                 VStack(spacing: 16) {
@@ -189,39 +189,30 @@ struct GameSettingsView: View {
             engine.makeSettingsView()
 
             if mode == .debugTest {
-                VStack(spacing: 4) {
+                VStack(spacing: Spacing.xxs) {
                     Image(systemName: "ant.fill")
                         .foregroundStyle(.orange)
                     Text("測試模式：你可以同時操作黑白雙方")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding()
+                .padding(Spacing.m)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: Radius.m)
                         .fill(Color.orange.opacity(0.1))
                 )
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Spacing.l)
             }
 
             Spacer()
 
             // Start button
-            Button {
+            Button("開始遊戲") {
                 navigateToGame = true
-            } label: {
-                Text("開始遊戲")
-                    .font(.title2.bold())
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.green)
-                    )
-                    .foregroundStyle(.white)
             }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 20)
+            .buttonStyle(PrimaryActionButtonStyle(tint: .green))
+            .padding(.horizontal, Spacing.xl)
+            .padding(.bottom, Spacing.m)
         }
         .animatedEntrance()
         .navigationTitle("遊戲設定")
@@ -230,9 +221,9 @@ struct GameSettingsView: View {
             if mode == .debugTest {
                 // Debug test mode: enable chat overlay, no multiplayer lock
                 engine.makeGameView()
-                    .overlay(
+                    .overlay {
                         ChatOverlayView(chatManager: chatManager)
-                    )
+                    }
             } else {
                 engine.makeGameView()
             }
