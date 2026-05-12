@@ -98,3 +98,153 @@ struct CheckersModel {
         self = CheckersModel(variant: v)
     }
 }
+
+// MARK: - Jump
+
+struct CheckersJump: Codable {
+    let from: CheckersPosition
+    let over: CheckersPosition
+    let to: CheckersPosition
+}
+
+// MARK: - Move Generation
+
+extension CheckersModel {
+
+    private func forwardDirs(for player: PlayerColor) -> [(Int, Int)] {
+        player == .black ? [(1, -1), (1, 1)] : [(-1, -1), (-1, 1)]
+    }
+
+    private func allDirs() -> [(Int, Int)] { [(1,-1),(1,1),(-1,-1),(-1,1)] }
+
+    private func inBounds(_ r: Int, _ c: Int) -> Bool {
+        (0..<boardSize).contains(r) && (0..<boardSize).contains(c)
+    }
+
+    func simpleMoves(for player: PlayerColor) -> [(CheckersPosition, CheckersPosition)] {
+        var result: [(CheckersPosition, CheckersPosition)] = []
+        for r in 0..<boardSize {
+            for c in 0..<boardSize {
+                let piece = board[r][c]
+                guard piece.owner == player else { continue }
+                let dirs = piece.isKing ? allDirs() : forwardDirs(for: player)
+                for (dr, dc) in dirs {
+                    if variant == .international && piece.isKing {
+                        var nr = r + dr; var nc = c + dc
+                        while inBounds(nr, nc) && board[nr][nc].isEmpty {
+                            result.append((CheckersPosition(row: r, col: c),
+                                           CheckersPosition(row: nr, col: nc)))
+                            nr += dr; nc += dc
+                        }
+                    } else {
+                        let nr = r + dr; let nc = c + dc
+                        if inBounds(nr, nc) && board[nr][nc].isEmpty {
+                            result.append((CheckersPosition(row: r, col: c),
+                                           CheckersPosition(row: nr, col: nc)))
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    func captureSequences(
+        from pos: CheckersPosition,
+        piece: CheckersPiece,
+        board intermediateBoard: [[CheckersPiece]],
+        visited: Set<CheckersPosition>
+    ) -> [[CheckersJump]] {
+        let dirs = piece.isKing ? allDirs() : forwardDirs(for: piece.owner!)
+        var sequences: [[CheckersJump]] = []
+
+        for (dr, dc) in dirs {
+            if variant == .international && piece.isKing {
+                var nr = pos.row + dr; var nc = pos.col + dc
+                while inBounds(nr, nc) && intermediateBoard[nr][nc].isEmpty {
+                    nr += dr; nc += dc
+                }
+                guard inBounds(nr, nc),
+                      let owner = intermediateBoard[nr][nc].owner,
+                      owner != piece.owner!,
+                      !visited.contains(CheckersPosition(row: nr, col: nc)) else { continue }
+                let capPos = CheckersPosition(row: nr, col: nc)
+                nr += dr; nc += dc
+                while inBounds(nr, nc) && intermediateBoard[nr][nc].isEmpty {
+                    let landPos = CheckersPosition(row: nr, col: nc)
+                    let jump = CheckersJump(from: pos, over: capPos, to: landPos)
+                    var nextBoard = intermediateBoard
+                    nextBoard[pos.row][pos.col] = .empty
+                    nextBoard[capPos.row][capPos.col] = .empty
+                    nextBoard[landPos.row][landPos.col] = piece
+                    let sub = captureSequences(from: landPos, piece: piece,
+                                               board: nextBoard,
+                                               visited: visited.union([capPos]))
+                    if sub.isEmpty {
+                        sequences.append([jump])
+                    } else {
+                        for s in sub { sequences.append([jump] + s) }
+                    }
+                    nr += dr; nc += dc
+                }
+            } else {
+                let mr = pos.row + dr; let mc = pos.col + dc
+                let lr = pos.row + 2*dr; let lc = pos.col + 2*dc
+                guard inBounds(lr, lc),
+                      let midOwner = intermediateBoard[mr][mc].owner,
+                      midOwner != piece.owner!,
+                      intermediateBoard[lr][lc].isEmpty,
+                      !visited.contains(CheckersPosition(row: mr, col: mc)) else { continue }
+                let capPos  = CheckersPosition(row: mr, col: mc)
+                let landPos = CheckersPosition(row: lr, col: lc)
+                let jump = CheckersJump(from: pos, over: capPos, to: landPos)
+                var nextBoard = intermediateBoard
+                nextBoard[pos.row][pos.col] = .empty
+                nextBoard[capPos.row][capPos.col] = .empty
+                nextBoard[landPos.row][landPos.col] = piece
+                let sub = captureSequences(from: landPos, piece: piece,
+                                           board: nextBoard,
+                                           visited: visited.union([capPos]))
+                if sub.isEmpty {
+                    sequences.append([jump])
+                } else {
+                    for s in sub { sequences.append([jump] + s) }
+                }
+            }
+        }
+        return sequences
+    }
+
+    func allCaptureSequences(for player: PlayerColor) -> [[CheckersJump]] {
+        var all: [[CheckersJump]] = []
+        for r in 0..<boardSize {
+            for c in 0..<boardSize {
+                let piece = board[r][c]
+                guard piece.owner == player else { continue }
+                let seqs = captureSequences(from: CheckersPosition(row: r, col: c),
+                                            piece: piece,
+                                            board: board,
+                                            visited: [])
+                all += seqs
+            }
+        }
+        if variant == .international && !all.isEmpty {
+            let maxLen = all.map(\.count).max()!
+            return all.filter { $0.count == maxLen }
+        }
+        return all
+    }
+
+    func validMoves(for player: PlayerColor) -> [(from: CheckersPosition, to: CheckersPosition, captures: [CheckersPosition])] {
+        let captures = allCaptureSequences(for: player)
+        if !captures.isEmpty {
+            return captures.map { seq in
+                let from = seq.first!.from
+                let to   = seq.last!.to
+                let caps = seq.map(\.over)
+                return (from: from, to: to, captures: caps)
+            }
+        }
+        return simpleMoves(for: player).map { (from: $0.0, to: $0.1, captures: []) }
+    }
+}
