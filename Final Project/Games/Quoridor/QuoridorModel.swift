@@ -191,21 +191,26 @@ struct QuoridorModel: Sendable {
         // BFS: both players still have a path
         var test = self
         test.hWalls[r][c] = true
-        return test.hasPath(from: test.positions[.black]!, toRow: 8)
-            && test.hasPath(from: test.positions[.white]!, toRow: 0)
+        guard let blackPos = test.positions[.black],
+              let whitePos = test.positions[.white] else { return false }
+        return test.hasPath(from: blackPos, toRow: 8)
+            && test.hasPath(from: whitePos, toRow: 0)
     }
 
     func canPlaceVWall(row r: Int, col c: Int) -> Bool {
         guard wallCounts[currentPlayer, default: 0] > 0 else { return false }
         guard r >= 0, r <= 7, c >= 0, c <= 7 else { return false }
         guard !vWalls[r][c] else { return false }
+        // No adjacent vertical wall sharing a row (top or bottom neighbor)
         if r > 0 && vWalls[r - 1][c] { return false }
         if r < 7 && vWalls[r + 1][c] { return false }
         if hWalls[r][c] { return false }
         var test = self
         test.vWalls[r][c] = true
-        return test.hasPath(from: test.positions[.black]!, toRow: 8)
-            && test.hasPath(from: test.positions[.white]!, toRow: 0)
+        guard let blackPos = test.positions[.black],
+              let whitePos = test.positions[.white] else { return false }
+        return test.hasPath(from: blackPos, toRow: 8)
+            && test.hasPath(from: whitePos, toRow: 0)
     }
 
     // MARK: - Apply Move
