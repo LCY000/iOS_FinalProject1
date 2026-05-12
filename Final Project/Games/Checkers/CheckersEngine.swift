@@ -143,7 +143,7 @@ final class CheckersEngine: GameEngine {
         refreshValidMoves()
     }
 
-    func makeGameView() -> AnyView { AnyView(Text("Checkers")) }
+    func makeGameView() -> AnyView { AnyView(CheckersGameView(engine: self)) }
 
     // MARK: - Convenience
 

@@ -117,6 +117,7 @@ struct GamePickerView: View {
     let mode: PlayMode
 
     @State private var selectedEngine: (any GameEngine)?
+    @State private var selectedGame: GameInfo?
     @State private var showSettings = false
 
     var body: some View {
@@ -129,6 +130,7 @@ struct GamePickerView: View {
                     Button {
                         let engine = game.createEngine()
                         selectedEngine = engine
+                        selectedGame = game
                         showSettings = true
                     } label: {
                         VStack(spacing: Spacing.s) {
@@ -157,8 +159,8 @@ struct GamePickerView: View {
         .navigationTitle("選擇遊戲")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showSettings) {
-            if let engine = selectedEngine {
-                GameSettingsView(engine: engine, mode: mode)
+            if let engine = selectedEngine, let game = selectedGame {
+                GameSettingsView(engine: engine, game: game, mode: mode)
             }
         }
     }
@@ -168,10 +170,12 @@ struct GamePickerView: View {
 
 struct GameSettingsView: View {
     let engine: any GameEngine
+    let game: GameInfo
     let mode: PlayMode
 
     @State private var navigateToGame = false
     @State private var chatManager = ChatManager()
+    @State private var showTutorial = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -217,6 +221,19 @@ struct GameSettingsView: View {
         .animatedEntrance()
         .navigationTitle("遊戲設定")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showTutorial = true
+                } label: {
+                    Image(systemName: "info.circle")
+                }
+                .accessibilityLabel("遊戲說明")
+            }
+        }
+        .sheet(isPresented: $showTutorial) {
+            TutorialView(game: game)
+        }
         .navigationDestination(isPresented: $navigateToGame) {
             if mode == .debugTest {
                 // Debug test mode: enable chat overlay, no multiplayer lock

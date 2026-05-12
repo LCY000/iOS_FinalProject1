@@ -129,10 +129,10 @@ final class QuoridorEngine: GameEngine {
     func exportSettings() -> Data { Data() }
     func applySettings(data: Data) {}
 
-    // MARK: - View Factory (placeholder until QuoridorGameView is implemented in Q7)
+    // MARK: - View Factory
 
     func makeGameView() -> AnyView {
-        AnyView(Text("Quoridor"))
+        AnyView(QuoridorGameView(engine: self))
     }
 
     // MARK: - Private
