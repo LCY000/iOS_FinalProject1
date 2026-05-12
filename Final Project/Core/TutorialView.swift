@@ -12,8 +12,7 @@ struct TutorialView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, Spacing.l)
 
-                    ForEach(game.tutorial.sections.indices, id: \.self) { i in
-                        let section = game.tutorial.sections[i]
+                    ForEach(game.tutorial.sections) { section in
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text(section.heading)
                                 .font(.appSection)
@@ -26,12 +25,10 @@ struct TutorialView: View {
                         .card(radius: Radius.m, elevation: .low, padding: 0)
                         .padding(.horizontal, Spacing.m)
                     }
-
-                    Spacer(minLength: Spacing.xl)
                 }
                 .padding(.top, Spacing.m)
             }
-            .navigationTitle(game.title + " — 規則說明")
+            .navigationTitle("\(game.title) — 規則說明")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

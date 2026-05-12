@@ -10,7 +10,8 @@ import SwiftUI
 
 // MARK: - Game Info
 
-struct TutorialSection: Sendable {
+struct TutorialSection: Identifiable, Sendable {
+    let id = UUID()
     let heading: String
     let body: String
 }
