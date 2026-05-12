@@ -8,7 +8,7 @@ import Foundation
 
 // MARK: - Piece
 
-enum CheckersPiece: Equatable {
+enum CheckersPiece: Equatable, Sendable {
     case empty
     case man(PlayerColor)   // 普通棋
     case king(PlayerColor)  // 王
@@ -30,21 +30,21 @@ enum CheckersPiece: Equatable {
 
 // MARK: - Position
 
-struct CheckersPosition: Equatable, Hashable, Codable {
+struct CheckersPosition: Equatable, Hashable, Codable, Sendable {
     let row: Int
     let col: Int
 }
 
 // MARK: - Variant
 
-enum CheckersVariant: String, Codable {
+enum CheckersVariant: String, Codable, Sendable {
     case american      // 8×8, non-flying kings
     case international // 10×10, flying kings, max-capture mandatory
 }
 
 // MARK: - Move Payload (for networking)
 
-struct CheckersMovePayload: Codable {
+struct CheckersMovePayload: Codable, Sendable {
     let path: [CheckersPosition]        // full route including start
     let captures: [CheckersPosition]    // all captured squares
     let promoted: Bool
@@ -58,7 +58,7 @@ struct CheckersMovePayload: Codable {
 
 // MARK: - Model
 
-struct CheckersModel {
+struct CheckersModel: Sendable {
     var board: [[CheckersPiece]]
     var currentPlayer: PlayerColor = .black
     var winner: PlayerColor?
@@ -101,7 +101,7 @@ struct CheckersModel {
 
 // MARK: - Jump
 
-struct CheckersJump: Codable {
+struct CheckersJump: Codable, Sendable {
     let from: CheckersPosition
     let over: CheckersPosition
     let to: CheckersPosition
@@ -127,7 +127,7 @@ extension CheckersModel {
             for c in 0..<boardSize {
                 let piece = board[r][c]
                 guard piece.owner == player else { continue }
-                let dirs = piece.isKing ? allDirs() : forwardDirs(for: player)
+                let dirs = (piece.isKing || variant == .international) ? allDirs() : forwardDirs(for: player)
                 for (dr, dc) in dirs {
                     if variant == .international && piece.isKing {
                         var nr = r + dr; var nc = c + dc
@@ -155,7 +155,8 @@ extension CheckersModel {
         board intermediateBoard: [[CheckersPiece]],
         visited: Set<CheckersPosition>
     ) -> [[CheckersJump]] {
-        let dirs = piece.isKing ? allDirs() : forwardDirs(for: piece.owner!)
+        guard let pieceOwner = piece.owner else { return [] }
+        let dirs = (piece.isKing || variant == .international) ? allDirs() : forwardDirs(for: pieceOwner)
         var sequences: [[CheckersJump]] = []
 
         for (dr, dc) in dirs {
@@ -166,7 +167,7 @@ extension CheckersModel {
                 }
                 guard inBounds(nr, nc),
                       let owner = intermediateBoard[nr][nc].owner,
-                      owner != piece.owner!,
+                      owner != pieceOwner,
                       !visited.contains(CheckersPosition(row: nr, col: nc)) else { continue }
                 let capPos = CheckersPosition(row: nr, col: nc)
                 nr += dr; nc += dc
@@ -192,7 +193,7 @@ extension CheckersModel {
                 let lr = pos.row + 2*dr; let lc = pos.col + 2*dc
                 guard inBounds(lr, lc),
                       let midOwner = intermediateBoard[mr][mc].owner,
-                      midOwner != piece.owner!,
+                      midOwner != pieceOwner,
                       intermediateBoard[lr][lc].isEmpty,
                       !visited.contains(CheckersPosition(row: mr, col: mc)) else { continue }
                 let capPos  = CheckersPosition(row: mr, col: mc)
