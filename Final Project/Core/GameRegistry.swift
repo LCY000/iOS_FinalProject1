@@ -10,12 +10,12 @@ import SwiftUI
 
 // MARK: - Game Info
 
-struct TutorialSection {
+struct TutorialSection: Sendable {
     let heading: String
     let body: String
 }
 
-struct TutorialContent {
+struct TutorialContent: Sendable {
     let overview: String
     let sections: [TutorialSection]
 }
