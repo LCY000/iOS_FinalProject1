@@ -162,7 +162,7 @@ struct CheckersSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Text("規則版本")
-                .font(.appSubtitle)
+                .font(.appSection)
             Picker("規則", selection: Binding(
                 get: { engine.model.variant },
                 set: { engine.model = CheckersModel(variant: $0) }
