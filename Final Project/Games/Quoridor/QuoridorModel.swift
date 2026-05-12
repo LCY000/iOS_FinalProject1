@@ -144,4 +144,105 @@ struct QuoridorModel: Sendable {
         }
         return false
     }
+
+    // MARK: - Valid Pawn Moves
+
+    func validPawnMoves(for player: PlayerColor) -> [QuoridorPosition] {
+        guard let pos = positions[player] else { return [] }
+        guard let opp = positions[player.opposite] else { return [] }
+        var result: [QuoridorPosition] = []
+
+        for dir in QuoridorDirection.allCases {
+            guard !isBlocked(from: pos, direction: dir) else { continue }
+            let next = pos.moved(dir)
+            guard next.isValid else { continue }
+
+            if next == opp {
+                // Adjacent to opponent — try straight jump first
+                let jumpStraight = next.moved(dir)
+                if jumpStraight.isValid && !isBlocked(from: next, direction: dir) {
+                    result.append(jumpStraight)
+                } else {
+                    // Straight jump blocked/out-of-bounds — try lateral jumps
+                    for lateral in dir.perpendiculars {
+                        guard !isBlocked(from: next, direction: lateral) else { continue }
+                        let jumpLateral = next.moved(lateral)
+                        if jumpLateral.isValid { result.append(jumpLateral) }
+                    }
+                }
+            } else {
+                result.append(next)
+            }
+        }
+        return result
+    }
+
+    // MARK: - Wall Placement Validation
+
+    func canPlaceHWall(row r: Int, col c: Int) -> Bool {
+        guard wallCounts[currentPlayer, default: 0] > 0 else { return false }
+        guard r >= 0, r <= 7, c >= 0, c <= 7 else { return false }
+        guard !hWalls[r][c] else { return false }
+        // No adjacent horizontal wall sharing a column (left or right neighbor)
+        if c > 0 && hWalls[r][c - 1] { return false }
+        if c < 7 && hWalls[r][c + 1] { return false }
+        // No crossing vertical wall at same intersection
+        if vWalls[r][c] { return false }
+        // BFS: both players still have a path
+        var test = self
+        test.hWalls[r][c] = true
+        return test.hasPath(from: test.positions[.black]!, toRow: 8)
+            && test.hasPath(from: test.positions[.white]!, toRow: 0)
+    }
+
+    func canPlaceVWall(row r: Int, col c: Int) -> Bool {
+        guard wallCounts[currentPlayer, default: 0] > 0 else { return false }
+        guard r >= 0, r <= 7, c >= 0, c <= 7 else { return false }
+        guard !vWalls[r][c] else { return false }
+        if r > 0 && vWalls[r - 1][c] { return false }
+        if r < 7 && vWalls[r + 1][c] { return false }
+        if hWalls[r][c] { return false }
+        var test = self
+        test.vWalls[r][c] = true
+        return test.hasPath(from: test.positions[.black]!, toRow: 8)
+            && test.hasPath(from: test.positions[.white]!, toRow: 0)
+    }
+
+    // MARK: - Apply Move
+
+    mutating func applyPawnMove(_ dest: QuoridorPosition) {
+        positions[currentPlayer] = dest
+        // Win: black reaches row 8, white reaches row 0
+        if (currentPlayer == .black && dest.row == 8) ||
+           (currentPlayer == .white && dest.row == 0) {
+            winner = currentPlayer
+        }
+        lastMove = QuoridorMove(kind: .pawn, row: dest.row, col: dest.col, seq: 0)
+        if winner == nil { currentPlayer = currentPlayer.opposite }
+    }
+
+    mutating func applyHWall(row r: Int, col c: Int) {
+        hWalls[r][c] = true
+        wallCounts[currentPlayer, default: 0] -= 1
+        lastMove = QuoridorMove(kind: .wallH, row: r, col: c, seq: 0)
+        currentPlayer = currentPlayer.opposite
+    }
+
+    mutating func applyVWall(row r: Int, col c: Int) {
+        vWalls[r][c] = true
+        wallCounts[currentPlayer, default: 0] -= 1
+        lastMove = QuoridorMove(kind: .wallV, row: r, col: c, seq: 0)
+        currentPlayer = currentPlayer.opposite
+    }
+
+    mutating func reset() {
+        positions = [.black: QuoridorPosition(row: 0, col: 4),
+                     .white: QuoridorPosition(row: 8, col: 4)]
+        wallCounts = [.black: 10, .white: 10]
+        hWalls = Array(repeating: Array(repeating: false, count: 8), count: 8)
+        vWalls = Array(repeating: Array(repeating: false, count: 8), count: 8)
+        currentPlayer = .black
+        winner = nil
+        lastMove = nil
+    }
 }
