@@ -90,9 +90,9 @@ struct QuoridorModel: Sendable {
     // hWalls[r][c] covers cols c and c+1; hWalls[r][c-1] covers cols c-1 and c.
     func isBlockedSouth(row r: Int, col c: Int) -> Bool {
         guard r < 8 else { return true }
-        let byRight = c <= 7 && hWalls[r][c]       // wall anchor at c, covers c
-        let byLeft  = c >= 1 && hWalls[r][c - 1]   // wall anchor at c-1, covers c as right half
-        return byRight || byLeft
+        let byAnchorHere = c < 8 && hWalls[r][c]       // wall anchored at c, covers cols c and c+1
+        let byAnchorLeft = c > 0 && hWalls[r][c - 1]   // wall anchored at c-1, right half covers c
+        return byAnchorHere || byAnchorLeft
     }
 
     func isBlockedNorth(row r: Int, col c: Int) -> Bool {
@@ -103,9 +103,9 @@ struct QuoridorModel: Sendable {
     // Moving east from (r, c) → (r, c+1) is blocked by any vWall covering row r at col gap c.
     func isBlockedEast(row r: Int, col c: Int) -> Bool {
         guard c < 8 else { return true }
-        let byBottom = r <= 7 && vWalls[r][c]
-        let byTop    = r >= 1 && vWalls[r - 1][c]
-        return byBottom || byTop
+        let byAnchorHere = r < 8 && vWalls[r][c]       // wall anchored at r, covers rows r and r+1
+        let byAnchorAbove = r > 0 && vWalls[r - 1][c]  // wall anchored at r-1, bottom half covers r
+        return byAnchorHere || byAnchorAbove
     }
 
     func isBlockedWest(row r: Int, col c: Int) -> Bool {
@@ -128,9 +128,11 @@ struct QuoridorModel: Sendable {
     func hasPath(from start: QuoridorPosition, toRow goalRow: Int) -> Bool {
         var visited = Set<QuoridorPosition>()
         var queue = [start]
+        var head = 0
         visited.insert(start)
-        while !queue.isEmpty {
-            let pos = queue.removeFirst()
+        while head < queue.count {
+            let pos = queue[head]
+            head += 1
             if pos.row == goalRow { return true }
             for dir in QuoridorDirection.allCases {
                 guard !isBlocked(from: pos, direction: dir) else { continue }
