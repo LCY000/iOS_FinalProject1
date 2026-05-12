@@ -146,6 +146,7 @@ final class QuoridorEngine: GameEngine {
         }
         model.applyPawnMove(dest)
         selectedPawn = nil
+        SoundManager.shared.play(.placePiece)
     }
 
     private func sendAndApplyWall(kind: QuoridorMoveKind, row: Int, col: Int) {
@@ -158,5 +159,6 @@ final class QuoridorEngine: GameEngine {
         if kind == .wallH { model.applyHWall(row: row, col: col) }
         else               { model.applyVWall(row: row, col: col) }
         inputMode = .pawn
+        SoundManager.shared.play(.opponentMove)
     }
 }

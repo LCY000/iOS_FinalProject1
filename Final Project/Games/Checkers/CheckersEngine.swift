@@ -65,7 +65,7 @@ final class CheckersEngine: GameEngine {
     // MARK: - Pending Move (two-tap UI — no separate confirm step)
     var pendingMove: (row: Int, col: Int)? { nil }
     func confirmMove() {}
-    func cancelMove() {}
+    func cancelMove() { selectedFrom = nil }
 
     // MARK: - Tap Handling
 

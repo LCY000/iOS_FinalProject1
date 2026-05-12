@@ -4,7 +4,6 @@ struct QuoridorGameView: View {
     @Bindable var engine: QuoridorEngine
     @Environment(\.dismiss) private var dismiss
 
-    // Perspective: guest sees board flipped 180°
     private var flipBoard: Bool {
         engine.isMultiplayer && engine.localPlayer == .white
     }
@@ -15,12 +14,13 @@ struct QuoridorGameView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.s) {
             wallCountBar
 
             Text(engine.statusMessage)
                 .font(.headline)
                 .foregroundStyle(engine.isGameOver ? .orange : .primary)
+                .animation(.easeInOut, value: engine.statusMessage)
 
             ScrollView([.horizontal, .vertical]) {
                 QuoridorBoardCanvas(
@@ -35,21 +35,28 @@ struct QuoridorGameView: View {
                     onTapCell: { r, c in engine.handleTap(row: r, col: c) },
                     onTapWallSlot: { r, c in engine.handleWallTap(row: r, col: c) }
                 )
-                .padding(12)
+                .clipShape(RoundedRectangle(cornerRadius: Radius.s))
+                .shadow(color: .black.opacity(0.40), radius: 10, x: 0, y: 5)
+                .padding(Spacing.s)
             }
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(
+                RoundedRectangle(cornerRadius: Radius.m)
+                    .fill(Color.black.opacity(0.07))
+            )
 
             modeBar
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Spacing.m)
+                .padding(.bottom, Spacing.xs)
         }
         .padding(.top)
         .animatedEntrance()
         .navigationTitle("步步為營")
         .navigationBarTitleDisplayMode(.inline)
         .hapticFeedback(.selection, trigger: engine.selectedPawn?.row ?? -1)
+        .hapticFeedback(.confirm, trigger: engine.model.currentPlayer == .black ? 0 : 1)
+        .hapticFeedback(.opponentMove, trigger: engine.expectedRecvSeq)
         .hapticFeedback(.win, trigger: engine.isGameOver)
         .onChange(of: engine.isGameOver) { _, over in
             if over { SoundManager.shared.play(.gameOver) }
@@ -84,14 +91,32 @@ struct QuoridorGameView: View {
                     .foregroundStyle(Color.pieceBlack)
                 Text("牆 \(engine.model.wallCounts[.black, default: 0])")
                     .font(.appNumber)
+                    .contentTransition(.numericText())
             }
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.xs)
+            .background(
+                Capsule().fill(engine.model.currentPlayer == .black
+                    ? Color.primary.opacity(0.12) : Color.clear)
+            )
+            .animation(.spring(duration: 0.3), value: engine.model.currentPlayer)
+
             Text("vs").font(.appCaption).foregroundStyle(.secondary)
+
             HStack(spacing: Spacing.xs) {
                 Image(systemName: "square.fill")
                     .foregroundStyle(Color.pieceWhite)
                 Text("牆 \(engine.model.wallCounts[.white, default: 0])")
                     .font(.appNumber)
+                    .contentTransition(.numericText())
             }
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.xs)
+            .background(
+                Capsule().fill(engine.model.currentPlayer == .white
+                    ? Color.gray.opacity(0.15) : Color.clear)
+            )
+            .animation(.spring(duration: 0.3), value: engine.model.currentPlayer)
         }
     }
 
@@ -119,8 +144,10 @@ struct QuoridorGameView: View {
                     Label("再來一局", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(PillButtonStyle(tint: .green))
+                .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(.spring(duration: 0.2), value: engine.isGameOver)
         .frame(height: 36)
     }
 }

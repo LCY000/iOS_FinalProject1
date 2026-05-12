@@ -131,15 +131,33 @@ struct QuoridorBoardCanvas: View {
             guard let pos = model.positions[player] else { continue }
             let pt = center(of: pos)
             let isSelected = selectedPawn == pos && player == localPlayer
-            let pawnRadius = cellSize * 0.38  // ~14 pt, leaves gap to cell edge
-            let rect = CGRect(x: pt.x - pawnRadius, y: pt.y - pawnRadius, width: pawnRadius * 2, height: pawnRadius * 2)
-            let color: Color = player == .black ? Color.pieceBlack : Color.pieceWhite
-            ctx.fill(Path(ellipseIn: rect), with: .color(color))
-            if player == .white {
-                ctx.stroke(Path(ellipseIn: rect), with: .color(Color.gray.opacity(0.5)), lineWidth: 1.5)
-            }
+            let pawnRadius = cellSize * 0.38
+            let rect = CGRect(x: pt.x - pawnRadius, y: pt.y - pawnRadius,
+                              width: pawnRadius * 2, height: pawnRadius * 2)
+
+            // Drop shadow
+            ctx.fill(Path(ellipseIn: rect.offsetBy(dx: 0, dy: 2)),
+                     with: .color(Color.black.opacity(0.25)))
+
+            // Base fill
+            let baseColor: Color = player == .black ? Color.pieceBlack : Color.pieceWhite
+            ctx.fill(Path(ellipseIn: rect), with: .color(baseColor))
+
+            // Specular highlight (top-left)
+            let hlW = pawnRadius * 0.90
+            let hlH = pawnRadius * 0.55
+            let hlRect = CGRect(x: pt.x - pawnRadius * 0.52, y: pt.y - pawnRadius * 0.60,
+                                width: hlW, height: hlH)
+            let hlAlpha: Double = player == .black ? 0.20 : 0.88
+            ctx.fill(Path(ellipseIn: hlRect), with: .color(Color.white.opacity(hlAlpha)))
+
+            // Edge stroke
+            let strokeColor: Color = player == .black
+                ? Color.black.opacity(0.6) : Color.gray.opacity(0.5)
+            ctx.stroke(Path(ellipseIn: rect), with: .color(strokeColor), lineWidth: 1.5)
+
+            // Selection ring
             if isSelected {
-                // Outset by 3pt so selection ring sits outside the pawn fill
                 ctx.stroke(Path(ellipseIn: rect.insetBy(dx: -3, dy: -3)),
                            with: .color(Color.accentColor), lineWidth: 2.5)
             }
