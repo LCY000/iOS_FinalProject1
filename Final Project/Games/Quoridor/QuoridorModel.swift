@@ -83,4 +83,63 @@ struct QuoridorModel: Sendable {
     var winner: PlayerColor?
     var isGameOver: Bool { winner != nil }
     var lastMove: QuoridorMove?
+
+    // MARK: - Wall Blocking Checks
+
+    // Moving south from (r, c) → (r+1, c) is blocked by any hWall covering column c at row gap r.
+    // hWalls[r][c] covers cols c and c+1; hWalls[r][c-1] covers cols c-1 and c.
+    func isBlockedSouth(row r: Int, col c: Int) -> Bool {
+        guard r < 8 else { return true }
+        let byRight = c <= 7 && hWalls[r][c]       // wall anchor at c, covers c
+        let byLeft  = c >= 1 && hWalls[r][c - 1]   // wall anchor at c-1, covers c as right half
+        return byRight || byLeft
+    }
+
+    func isBlockedNorth(row r: Int, col c: Int) -> Bool {
+        guard r > 0 else { return true }
+        return isBlockedSouth(row: r - 1, col: c)
+    }
+
+    // Moving east from (r, c) → (r, c+1) is blocked by any vWall covering row r at col gap c.
+    func isBlockedEast(row r: Int, col c: Int) -> Bool {
+        guard c < 8 else { return true }
+        let byBottom = r <= 7 && vWalls[r][c]
+        let byTop    = r >= 1 && vWalls[r - 1][c]
+        return byBottom || byTop
+    }
+
+    func isBlockedWest(row r: Int, col c: Int) -> Bool {
+        guard c > 0 else { return true }
+        return isBlockedEast(row: r, col: c - 1)
+    }
+
+    func isBlocked(from pos: QuoridorPosition, direction: QuoridorDirection) -> Bool {
+        switch direction {
+        case .north: return isBlockedNorth(row: pos.row, col: pos.col)
+        case .south: return isBlockedSouth(row: pos.row, col: pos.col)
+        case .east:  return isBlockedEast(row: pos.row, col: pos.col)
+        case .west:  return isBlockedWest(row: pos.row, col: pos.col)
+        }
+    }
+
+    // MARK: - BFS Path Check
+
+    // Returns true if there is a path from `start` to any square in `goalRow`.
+    func hasPath(from start: QuoridorPosition, toRow goalRow: Int) -> Bool {
+        var visited = Set<QuoridorPosition>()
+        var queue = [start]
+        visited.insert(start)
+        while !queue.isEmpty {
+            let pos = queue.removeFirst()
+            if pos.row == goalRow { return true }
+            for dir in QuoridorDirection.allCases {
+                guard !isBlocked(from: pos, direction: dir) else { continue }
+                let next = pos.moved(dir)
+                guard next.isValid, !visited.contains(next) else { continue }
+                visited.insert(next)
+                queue.append(next)
+            }
+        }
+        return false
+    }
 }
