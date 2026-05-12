@@ -44,8 +44,8 @@ final class CheckersEngine: GameEngine {
     var statusMessage: String {
         if isGameOver {
             guard let winner = model.winner else { return "平手" }
-            if isMultiplayer { return (winner == localPlayer ? "你" : "對手") + " 獲勝！" }
-            return "\(winner.displayName) 獲勝！"
+            if isMultiplayer { return (winner == localPlayer ? "你" : "對手") + " 獲勝！🎉" }
+            return "\(winner.displayName) 獲勝！🎉"
         }
         if isMultiplayer {
             return currentPlayer == localPlayer ? "輪到你了" : "等待對手…"
@@ -162,7 +162,7 @@ struct CheckersSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             Text("規則版本")
-                .font(.headline)
+                .font(.appSubtitle)
             Picker("規則", selection: Binding(
                 get: { engine.model.variant },
                 set: { engine.model = CheckersModel(variant: $0) }
@@ -174,10 +174,10 @@ struct CheckersSettingsView: View {
             Text(engine.model.variant == .american
                  ? "強制吃子，普通王只走一格"
                  : "強制吃最多子，飛王可走任意距離")
-                .font(.caption)
+                .font(.appCaption)
                 .foregroundStyle(.secondary)
         }
         .padding(Spacing.m)
-        .card(radius: Radius.m, elevation: .low, padding: CGFloat(0))
+        .card(radius: Radius.m, elevation: .low, padding: 0)
     }
 }

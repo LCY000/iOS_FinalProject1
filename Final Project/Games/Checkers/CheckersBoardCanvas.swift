@@ -8,7 +8,8 @@ struct CheckersBoardCanvas: View {
     let onTap: (Int, Int) -> Void
 
     private var boardSize: Int { board.count }
-    private let cellSize: CGFloat = 40
+    // Adapts to board variant: 40pt for 8×8 (American), 32pt for 10×10 (International)
+    private var cellSize: CGFloat { boardSize == 10 ? 32 : 40 }
 
     private func displayPos(_ pos: CheckersPosition) -> CheckersPosition {
         flipBoard
@@ -31,6 +32,8 @@ struct CheckersBoardCanvas: View {
         }
         .frame(width: total, height: total)
         .contentShape(Rectangle())
+        .accessibilityLabel("Checkers board")
+        .accessibilityAddTraits(.isButton)
         .onTapGesture { loc in
             var col = Int(loc.x / cellSize)
             var row = Int(loc.y / cellSize)
