@@ -249,3 +249,48 @@ extension CheckersModel {
         return simpleMoves(for: player).map { (from: $0.0, to: $0.1, captures: []) }
     }
 }
+
+// MARK: - Apply Move
+
+extension CheckersModel {
+
+    // Applies a complete move (possibly multi-jump).
+    // `path`: full sequence of positions [start, land1, land2, ...]
+    // `captures`: all captured squares
+    @discardableResult
+    mutating func applyMove(path: [CheckersPosition], captures: [CheckersPosition]) -> Bool {
+        guard let from = path.first, let to = path.last else { return false }
+        let piece = board[from.row][from.col]
+        guard piece.owner == currentPlayer else { return false }
+
+        // Remove captured pieces
+        for cap in captures { board[cap.row][cap.col] = .empty }
+        // Move piece
+        board[from.row][from.col] = .empty
+        board[to.row][to.col] = piece
+
+        // King promotion (only at end of full turn)
+        let promoted = tryPromote(at: to)
+
+        checkWinner()
+        if winner == nil { currentPlayer = currentPlayer.opposite }
+        return promoted
+    }
+
+    // Returns true if promotion happened
+    @discardableResult
+    private mutating func tryPromote(at pos: CheckersPosition) -> Bool {
+        let piece = board[pos.row][pos.col]
+        guard case .man(let owner) = piece else { return false }
+        let kingRow = (owner == .black) ? boardSize - 1 : 0
+        guard pos.row == kingRow else { return false }
+        board[pos.row][pos.col] = .king(owner)
+        return true
+    }
+
+    private mutating func checkWinner() {
+        let opp = currentPlayer.opposite
+        let oppMoves = validMoves(for: opp)
+        if oppMoves.isEmpty { winner = currentPlayer }
+    }
+}
