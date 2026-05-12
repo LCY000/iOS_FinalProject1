@@ -19,6 +19,7 @@ struct RoomView: View {
     @State private var selectedGameIndex: Int = 0
     @State private var settingsEngine: (any GameEngine)?
     @State private var showLeaveConfirmation: Bool = false
+    @State private var tutorialGame: GameInfo?
 
     init(multipeerManager: MultipeerManager) {
         self.multipeerManager = multipeerManager
@@ -191,6 +192,10 @@ struct RoomView: View {
         .hapticFeedback(.connect, trigger: multipeerManager.connectionState == .connected)
         .hapticFeedback(.disconnect, trigger: session.showDisconnectAlert)
         .hapticFeedback(.disconnect, trigger: session.showDesyncAlert)
+        .sheet(item: $tutorialGame) { game in
+            TutorialView(game: game)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     // MARK: - Room-Level Alert Bindings
@@ -287,6 +292,17 @@ struct RoomView: View {
                                         }
                                     }
                             )
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            Button {
+                                tutorialGame = game
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .padding(Spacing.xs)
+                            }
+                            .buttonStyle(.plain)
                         }
                         .foregroundStyle(selectedGameIndex == index ? .blue : .primary)
                     }
