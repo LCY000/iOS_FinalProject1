@@ -195,6 +195,7 @@ struct RoomView: View {
         .sheet(item: $tutorialGame) { game in
             TutorialView(game: game)
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -292,19 +293,19 @@ struct RoomView: View {
                                         }
                                     }
                             )
-                        }
-                        .overlay(alignment: .topTrailing) {
-                            Button {
-                                tutorialGame = game
-                            } label: {
-                                Image(systemName: "info.circle")
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                                    .padding(Spacing.xs)
+                            .foregroundStyle(selectedGameIndex == index ? .blue : .primary)
+                            .overlay(alignment: .topTrailing) {
+                                Button {
+                                    tutorialGame = game
+                                } label: {
+                                    Image(systemName: "info.circle")
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .padding(Spacing.xs)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
-                        .foregroundStyle(selectedGameIndex == index ? .blue : .primary)
                     }
                 }
                 .padding(.horizontal, 24)
