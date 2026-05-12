@@ -21,7 +21,7 @@ final class QuoridorEngine: GameEngine {
     var model = QuoridorModel()
     var inputMode: QuoridorInputMode = .pawn
     var selectedPawn: QuoridorPosition?
-    var wallPreview: (row: Int, col: Int)?
+    var wallPreview: (row: Int, col: Int)? // TODO(Q7): set via drag gesture in QuoridorGameView
 
     // GameEngine computed
     var currentPlayer: PlayerColor { model.currentPlayer }
@@ -30,8 +30,7 @@ final class QuoridorEngine: GameEngine {
     var boardSize: Int { QuoridorModel.boardSize }
 
     var statusMessage: String {
-        if isGameOver {
-            let winner = model.winner!
+        if let winner = model.winner {
             if isMultiplayer { return (winner == localPlayer ? "你" : "對手") + " 獲勝！" }
             return "\(winner.displayName) 獲勝！"
         }
@@ -73,7 +72,7 @@ final class QuoridorEngine: GameEngine {
         guard selectedPawn != nil else { return false }
         let valid = model.validPawnMoves(for: currentPlayer)
         guard valid.contains(tapped) else {
-            selectedPawn = nil
+            // Keep selection alive — user may tap a different valid destination next
             return false
         }
 
