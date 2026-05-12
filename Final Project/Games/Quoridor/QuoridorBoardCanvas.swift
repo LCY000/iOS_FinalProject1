@@ -29,7 +29,7 @@ struct QuoridorBoardCanvas: View {
     }
 
     var body: some View {
-        let totalSize = CGFloat(9) * slotSize - wallGap
+        let totalSize = CGFloat(QuoridorModel.boardSize) * slotSize - wallGap
         Canvas { ctx, _ in
             drawBoard(ctx: ctx)
             drawWalls(ctx: ctx)
@@ -39,6 +39,8 @@ struct QuoridorBoardCanvas: View {
         }
         .frame(width: totalSize, height: totalSize)
         .contentShape(Rectangle())
+        .accessibilityLabel(Text("Quoridor board"))
+        .accessibilityAddTraits(.isButton)
         .onTapGesture { location in
             if inputMode == .pawn {
                 let col = Int(location.x / slotSize)
@@ -60,12 +62,11 @@ struct QuoridorBoardCanvas: View {
 
     private func drawBoard(ctx: GraphicsContext) {
         let cellColor = Color(red: 0.83, green: 0.71, blue: 0.51)
-        for row in 0..<9 {
-            for col in 0..<9 {
-                let d = displayPos(QuoridorPosition(row: row, col: col))
+        for row in 0..<QuoridorModel.boardSize {
+            for col in 0..<QuoridorModel.boardSize {
                 let rect = CGRect(
-                    x: CGFloat(d.col) * slotSize,
-                    y: CGFloat(d.row) * slotSize,
+                    x: CGFloat(col) * slotSize,
+                    y: CGFloat(row) * slotSize,
                     width: cellSize, height: cellSize
                 )
                 ctx.fill(Path(roundedRect: rect, cornerRadius: 3), with: .color(cellColor))
@@ -77,9 +78,9 @@ struct QuoridorBoardCanvas: View {
         let wallColor = Color(red: 0.36, green: 0.24, blue: 0.12)
         for r in 0..<8 {
             for c in 0..<8 {
+                let displayR = flipBoard ? 7 - r : r
+                let displayC = flipBoard ? 7 - c : c
                 if model.hWalls[r][c] {
-                    let displayR = flipBoard ? 7 - r : r
-                    let displayC = flipBoard ? 7 - c : c
                     // H-wall: between row displayR and displayR+1, spanning cols displayC and displayC+1
                     let x = CGFloat(displayC) * slotSize
                     let y = CGFloat(displayR + 1) * slotSize - wallGap
@@ -87,8 +88,6 @@ struct QuoridorBoardCanvas: View {
                     ctx.fill(Path(rect), with: .color(wallColor))
                 }
                 if model.vWalls[r][c] {
-                    let displayR = flipBoard ? 7 - r : r
-                    let displayC = flipBoard ? 7 - c : c
                     // V-wall: between col displayC and displayC+1, spanning rows displayR and displayR+1
                     let x = CGFloat(displayC + 1) * slotSize - wallGap
                     let y = CGFloat(displayR) * slotSize
@@ -102,8 +101,8 @@ struct QuoridorBoardCanvas: View {
     private func drawValidMoves(ctx: GraphicsContext) {
         for pos in validMoves {
             let pt = center(of: pos)
-            let r = cellSize * 0.22
-            let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
+            let dotRadius = cellSize * 0.22  // ~8 pt hint dot, visually centered in cell
+            let rect = CGRect(x: pt.x - dotRadius, y: pt.y - dotRadius, width: dotRadius * 2, height: dotRadius * 2)
             ctx.fill(Path(ellipseIn: rect), with: .color(Color.accentColor.opacity(0.5)))
         }
     }
@@ -132,14 +131,15 @@ struct QuoridorBoardCanvas: View {
             guard let pos = model.positions[player] else { continue }
             let pt = center(of: pos)
             let isSelected = selectedPawn == pos && player == localPlayer
-            let r = cellSize * 0.38
-            let rect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
+            let pawnRadius = cellSize * 0.38  // ~14 pt, leaves gap to cell edge
+            let rect = CGRect(x: pt.x - pawnRadius, y: pt.y - pawnRadius, width: pawnRadius * 2, height: pawnRadius * 2)
             let color: Color = player == .black ? Color.pieceBlack : Color.pieceWhite
             ctx.fill(Path(ellipseIn: rect), with: .color(color))
             if player == .white {
                 ctx.stroke(Path(ellipseIn: rect), with: .color(Color.gray.opacity(0.5)), lineWidth: 1.5)
             }
             if isSelected {
+                // Outset by 3pt so selection ring sits outside the pawn fill
                 ctx.stroke(Path(ellipseIn: rect.insetBy(dx: -3, dy: -3)),
                            with: .color(Color.accentColor), lineWidth: 2.5)
             }
