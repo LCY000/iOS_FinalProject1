@@ -47,7 +47,7 @@ enum QuoridorMoveKind: String, Codable, Sendable {
     case wallV  // vertical:   spans (col c↔c+1) at rows r and r+1
 }
 
-struct QuoridorMove: Codable, Sendable {
+struct QuoridorMove: Codable, Equatable, Sendable {
     let kind: QuoridorMoveKind
     let row: Int
     let col: Int

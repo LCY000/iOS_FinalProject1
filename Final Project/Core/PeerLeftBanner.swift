@@ -30,6 +30,11 @@ struct PeerLeftBanner: View {
             .padding(.horizontal, Spacing.m)
             .padding(.top, Spacing.xs)
             .transition(.move(edge: .top).combined(with: .opacity))
+            .task {
+                try? await Task.sleep(for: .seconds(3.5))
+                guard !Task.isCancelled else { return }
+                withAnimation { session.showPeerLeftBanner = false }
+            }
         }
     }
 }

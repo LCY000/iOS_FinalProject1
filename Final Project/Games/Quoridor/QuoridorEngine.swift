@@ -21,7 +21,14 @@ final class QuoridorEngine: GameEngine {
     var model = QuoridorModel()
     var inputMode: QuoridorInputMode = .pawn
     var selectedPawn: QuoridorPosition?
-    var wallPreview: (row: Int, col: Int)? // TODO(Q7): set via drag gesture in QuoridorGameView
+    var wallPreview: (row: Int, col: Int)?
+    var pendingWall: (kind: QuoridorMoveKind, row: Int, col: Int)?
+    /// Cached BFS result for the current player's pawn moves. Avoids running BFS every render.
+    private(set) var cachedValidPawnMoves: [QuoridorPosition] = []
+
+    init() {
+        cachedValidPawnMoves = model.validPawnMoves(for: model.currentPlayer)
+    }
 
     // GameEngine computed
     var currentPlayer: PlayerColor { model.currentPlayer }
@@ -43,16 +50,29 @@ final class QuoridorEngine: GameEngine {
     // MARK: - Multiplayer
     var isMultiplayer: Bool = false
     var localPlayer: PlayerColor = .black
+    var opponentName: String? = nil
     var onMoveToSend: ((MessageEnvelope) -> Void)?
     var onRestartRequested: (() -> Void)?
     var nextSendSeq: UInt32 = 1
     var expectedRecvSeq: UInt32 = 1
     var onDesyncDetected: (() -> Void)?
 
-    // MARK: - Pending Move (unused in Quoridor — moves apply immediately)
+    // MARK: - Pending Move
     var pendingMove: (row: Int, col: Int)? { nil }
-    func confirmMove() {}
-    func cancelMove() {}
+
+    func confirmMove() {
+        guard let w = pendingWall else { return }
+        sendAndApplyWall(kind: w.kind, row: w.row, col: w.col)
+        pendingWall = nil
+        wallPreview = nil
+        refreshValidMoves()
+    }
+
+    func cancelMove() {
+        pendingWall = nil
+        wallPreview = nil
+        selectedPawn = nil
+    }
 
     // MARK: - Tap Handling
 
@@ -70,13 +90,13 @@ final class QuoridorEngine: GameEngine {
         }
 
         guard selectedPawn != nil else { return false }
-        let valid = model.validPawnMoves(for: currentPlayer)
-        guard valid.contains(tapped) else {
+        guard cachedValidPawnMoves.contains(tapped) else {
             // Keep selection alive — user may tap a different valid destination next
             return false
         }
 
         sendAndApplyPawn(dest: tapped)
+        refreshValidMoves()
         return true
     }
 
@@ -85,12 +105,15 @@ final class QuoridorEngine: GameEngine {
         guard !isMultiplayer || currentPlayer == localPlayer else { return }
         guard inputMode == .wallH || inputMode == .wallV else { return }
 
-        let ok = inputMode == .wallH
+        let kind: QuoridorMoveKind = inputMode == .wallH ? .wallH : .wallV
+        let ok = kind == .wallH
             ? model.canPlaceHWall(row: row, col: col)
             : model.canPlaceVWall(row: row, col: col)
         guard ok else { return }
 
-        sendAndApplyWall(kind: inputMode == .wallH ? .wallH : .wallV, row: row, col: col)
+        // Stage as pending — user must confirm before the wall is placed.
+        pendingWall = (kind: kind, row: row, col: col)
+        wallPreview = (row: row, col: col)
     }
 
     // MARK: - Remote Move
@@ -110,6 +133,8 @@ final class QuoridorEngine: GameEngine {
             model.applyVWall(row: move.row, col: move.col)
         }
         selectedPawn = nil
+        refreshValidMoves()
+        SoundManager.shared.play(.opponentMove)
     }
 
     // MARK: - Reset
@@ -118,9 +143,20 @@ final class QuoridorEngine: GameEngine {
         model.reset()
         selectedPawn = nil
         wallPreview = nil
+        pendingWall = nil
         inputMode = .pawn
         nextSendSeq = 1
         expectedRecvSeq = 1
+        refreshValidMoves()
+    }
+
+    private func refreshValidMoves() {
+        cachedValidPawnMoves = model.validPawnMoves(for: model.currentPlayer)
+    }
+
+    func applyFirstMover(_ player: PlayerColor) {
+        model.currentPlayer = player
+        refreshValidMoves()
     }
 
     // MARK: - Settings (Quoridor has no configurable settings)
@@ -159,6 +195,6 @@ final class QuoridorEngine: GameEngine {
         if kind == .wallH { model.applyHWall(row: row, col: col) }
         else               { model.applyVWall(row: row, col: col) }
         inputMode = .pawn
-        SoundManager.shared.play(.opponentMove)
+        SoundManager.shared.play(.wallPlace)
     }
 }

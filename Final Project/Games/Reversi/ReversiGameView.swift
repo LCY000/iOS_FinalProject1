@@ -20,9 +20,25 @@ struct ReversiGameView: View {
     private var winnerLabel: String {
         guard let winner = engine.model.winner else { return "" }
         if engine.isMultiplayer {
-            return winner == engine.localPlayer ? "你" : "對手"
+            return winner == engine.localPlayer
+                ? PlayerNameProvider.broadcastName
+                : (engine.opponentName ?? "對手")
         }
         return winner.displayName
+    }
+
+    private var blackPlayerName: String {
+        guard engine.isMultiplayer else { return "黑方" }
+        return engine.localPlayer == .black
+            ? PlayerNameProvider.broadcastName
+            : (engine.opponentName ?? "對手")
+    }
+
+    private var whitePlayerName: String {
+        guard engine.isMultiplayer else { return "白方" }
+        return engine.localPlayer == .white
+            ? PlayerNameProvider.broadcastName
+            : (engine.opponentName ?? "對手")
     }
 
     var body: some View {
@@ -99,35 +115,51 @@ struct ReversiGameView: View {
 
     private var scoreBar: some View {
         HStack(spacing: Spacing.l) {
-            HStack(spacing: Spacing.xs) {
-                Circle()
-                    .fill(Color.pieceBlack)
-                    .stroke(Color.pieceWhite, lineWidth: 1)
-                    .frame(width: 24, height: 24)
-                Text("\(engine.scores.black)").font(.appNumber)
-            }
-            .padding(.horizontal, Spacing.m)
-            .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule().fill(engine.currentPlayer == .black
-                               ? Color.primary.opacity(0.12) : Color.clear)
+            playerCell(
+                pieceColor: .pieceBlack, strokeColor: .pieceWhite,
+                score: engine.scores.black,
+                isActive: engine.currentPlayer == .black,
+                activeFill: Color.primary.opacity(0.12),
+                name: blackPlayerName
             )
 
             Text("vs").font(.appCaption).foregroundStyle(.secondary)
 
+            playerCell(
+                pieceColor: .pieceWhite, strokeColor: .gray,
+                score: engine.scores.white,
+                isActive: engine.currentPlayer == .white,
+                activeFill: Color.gray.opacity(0.15),
+                name: whitePlayerName
+            )
+        }
+    }
+
+    private func playerCell(
+        pieceColor: Color, strokeColor: Color,
+        score: Int, isActive: Bool, activeFill: Color,
+        name: String
+    ) -> some View {
+        VStack(spacing: 2) {
             HStack(spacing: Spacing.xs) {
                 Circle()
-                    .fill(Color.pieceWhite)
-                    .stroke(Color.gray, lineWidth: 1)
-                    .frame(width: 24, height: 24)
-                Text("\(engine.scores.white)").font(.appNumber)
+                    .fill(pieceColor)
+                    .stroke(strokeColor, lineWidth: 1)
+                    .frame(width: 22, height: 22)
+                Text("\(score)")
+                    .font(.appNumber)
+                    .contentTransition(.numericText())
             }
             .padding(.horizontal, Spacing.m)
             .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule().fill(engine.currentPlayer == .white
-                               ? Color.gray.opacity(0.15) : Color.clear)
-            )
+            .background(Capsule().fill(isActive ? activeFill : .clear))
+            .animation(.spring(duration: 0.3), value: engine.currentPlayer)
+
+            Text(name)
+                .font(.appCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: 100)
         }
     }
 
@@ -174,7 +206,8 @@ struct ReversiGameView: View {
     // MARK: - Board Grid
 
     private var boardGrid: some View {
-        VStack(spacing: 0) {
+        let validSet = Set(engine.validMoves.map { $0.row * 16 + $0.col })
+        return VStack(spacing: 0) {
             ForEach(0..<engine.boardSize, id: \.self) { row in
                 HStack(spacing: 0) {
                     ForEach(0..<engine.boardSize, id: \.self) { col in
@@ -182,7 +215,7 @@ struct ReversiGameView: View {
                         let isLastMove = engine.lastMove?.row == row && engine.lastMove?.col == col
                         ReversiCellView(
                             cellState: engine.board[row][col],
-                            isValidMove: isValidMove(row: row, col: col),
+                            isValidMove: validSet.contains(row * 16 + col),
                             isPending: isPending,
                             pendingColor: isPending ? CellState.from(engine.currentPlayer) : .empty,
                             isLastMove: isLastMove,
@@ -199,10 +232,6 @@ struct ReversiGameView: View {
         .background(Color.boardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-    }
-
-    private func isValidMove(row: Int, col: Int) -> Bool {
-        engine.validMoves.contains(where: { $0.row == row && $0.col == col })
     }
 }
 

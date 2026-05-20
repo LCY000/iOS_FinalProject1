@@ -117,14 +117,52 @@ struct ChatMessage: Codable, Identifiable {
     }
 }
 
+// MARK: - First Mover Configuration
+
+enum FirstMoverInitial: String, Codable, Sendable {
+    case host   // host plays Black, goes first (default)
+    case guest  // guest plays Black, goes first
+    case random // random each game
+}
+
+enum RematchRotation: String, Codable, Sendable {
+    case fixed      // same first player every rematch
+    case alternate  // swap after each rematch
+    case random     // random each rematch
+}
+
+struct FirstMoverConfig: Codable, Sendable {
+    var initial: FirstMoverInitial = .host
+    var onRematch: RematchRotation = .fixed
+}
+
 // MARK: - Start Game Payload
 
-/// Sent by host → guest when a game starts. Carries the game type identifier
-/// and the game-specific encoded settings so the guest can construct a
-/// matching engine.
+/// Sent by host → guest when a game starts. Carries the game type identifier,
+/// the game-specific encoded settings, and first-mover configuration.
 struct StartGamePayload: Codable {
     let gameType: String
     let settings: Data
+    var hostLocalPlayer: PlayerColor
+    var firstMoverConfig: FirstMoverConfig
+
+    init(gameType: String, settings: Data,
+         hostLocalPlayer: PlayerColor = .black,
+         firstMoverConfig: FirstMoverConfig = FirstMoverConfig()) {
+        self.gameType = gameType
+        self.settings = settings
+        self.hostLocalPlayer = hostLocalPlayer
+        self.firstMoverConfig = firstMoverConfig
+    }
+
+    // Backward-compatible: old peers without the new fields default to host-first.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        gameType         = try c.decode(String.self,             forKey: .gameType)
+        settings         = try c.decode(Data.self,               forKey: .settings)
+        hostLocalPlayer  = try c.decodeIfPresent(PlayerColor.self,        forKey: .hostLocalPlayer) ?? .black
+        firstMoverConfig = try c.decodeIfPresent(FirstMoverConfig.self,   forKey: .firstMoverConfig) ?? FirstMoverConfig()
+    }
 }
 
 // MARK: - Restart Vote Response
@@ -153,6 +191,10 @@ extension GameEngine {
         let envelope = MessageEnvelope(type: .playerMove, gameType: gameType, payload: move.toData())
         onMoveToSend?(envelope)
     }
+
+    /// Sets the initial current player before the game begins.
+    /// Call this after `reset()` when a non-default first player is needed.
+    func applyFirstMover(_ player: PlayerColor) {}
 }
 
 // MARK: - Game Engine Protocol
@@ -175,6 +217,8 @@ protocol GameEngine: AnyObject, Observable {
     // MARK: Multiplayer
     var isMultiplayer: Bool { get set }
     var localPlayer: PlayerColor { get set }
+    /// Opponent's display name (set by GameSessionCoordinator when starting a game).
+    var opponentName: String? { get set }
 
     // MARK: Move Confirmation
     var pendingMove: (row: Int, col: Int)? { get }

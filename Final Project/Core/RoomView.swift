@@ -20,6 +20,8 @@ struct RoomView: View {
     @State private var settingsEngine: (any GameEngine)?
     @State private var showLeaveConfirmation: Bool = false
     @State private var tutorialGame: GameInfo?
+    @State private var firstMoverConfig = FirstMoverConfig()
+    @State private var checkmarkBounced = false
 
     init(multipeerManager: MultipeerManager) {
         self.multipeerManager = multipeerManager
@@ -49,6 +51,8 @@ struct RoomView: View {
                             settingsEngine.makeSettingsView()
                         }
                     }
+
+                    firstMoverSection
                 } else {
                     waitingForHostSection
                 }
@@ -58,6 +62,7 @@ struct RoomView: View {
                 if multipeerManager.isHost {
                     Button {
                         let game = availableGames[selectedGameIndex]
+                        session.firstMoverConfig = firstMoverConfig
                         session.hostStartGame(game: game, settingsEngine: settingsEngine)
                     } label: {
                         Text("開始遊戲")
@@ -132,6 +137,10 @@ struct RoomView: View {
         .onAppear {
             session.attachHandlers()
             updateSettingsEngine()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                checkmarkBounced.toggle()
+            }
         }
         .onChange(of: selectedGameIndex) { _, _ in
             updateSettingsEngine()
@@ -232,13 +241,19 @@ struct RoomView: View {
     // MARK: - Connected Header
 
     private var connectedHeader: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.green)
+        VStack(spacing: Spacing.xs) {
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.12))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.green)
+                    .symbolEffect(.bounce, value: checkmarkBounced)
+            }
 
             Text("已連線")
-                .font(.headline)
+                .font(.title3.bold())
 
             if let peerName = multipeerManager.connectedPeerName {
                 Text("對手：\(peerName)")
@@ -247,53 +262,63 @@ struct RoomView: View {
             }
 
             HStack(spacing: 4) {
-                Image(systemName: multipeerManager.connectionMode == .wifi ? "wifi" : "airplane")
+                Image(systemName: multipeerManager.connectionMode == .wifi ? "wifi" : "antenna.radiowaves.left.and.right")
                     .font(.caption)
                 Text(multipeerManager.connectionMode.rawValue)
                     .font(.caption)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+            .padding(.horizontal, Spacing.s)
+            .padding(.vertical, Spacing.xxs + 2)
+            .background(Capsule().fill(Color.secondary.opacity(0.12)))
             .foregroundStyle(.secondary)
         }
-        .padding(.top, 20)
+        .padding(.top, Spacing.m)
     }
 
     // MARK: - Game Selection
 
+    private func gameColor(for game: GameInfo) -> Color {
+        switch game.gameType {
+        case "reversi":  return .purple
+        case "gomoku":   return .teal
+        case "quoridor": return .blue
+        case "checkers": return .orange
+        default:         return .blue
+        }
+    }
+
     private var gameSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             Text("選擇遊戲")
                 .font(.headline)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Spacing.l)
 
             ScrollView(.horizontal) {
                 HStack(spacing: Spacing.s) {
                     ForEach(availableGames.enumerated(), id: \.element.id) { index, game in
+                        let isSelected = selectedGameIndex == index
+                        let accent = gameColor(for: game)
                         Button {
                             selectedGameIndex = index
                         } label: {
                             VStack(spacing: Spacing.xs) {
                                 Image(systemName: game.icon)
                                     .font(.system(size: 28))
+                                    .foregroundStyle(isSelected ? accent : .secondary)
                                 Text(game.title)
                                     .font(.subheadline.bold())
+                                    .foregroundStyle(isSelected ? accent : .primary)
                             }
-                            .frame(width: 100, height: 90)
+                            .frame(width: 108, height: 90)
                             .background(
                                 RoundedRectangle(cornerRadius: Radius.m)
-                                    .fill(selectedGameIndex == index
-                                          ? Color.blue.opacity(0.15)
-                                          : Color.gray.opacity(0.1))
+                                    .fill(isSelected ? accent.opacity(0.12) : Color.gray.opacity(0.08))
                                     .overlay {
-                                        if selectedGameIndex == index {
-                                            RoundedRectangle(cornerRadius: Radius.m)
-                                                .stroke(Color.blue, lineWidth: 2)
-                                        }
+                                        RoundedRectangle(cornerRadius: Radius.m)
+                                            .stroke(isSelected ? accent : Color.clear, lineWidth: 2)
                                     }
                             )
-                            .foregroundStyle(selectedGameIndex == index ? .blue : .primary)
+                            .animation(.spring(duration: 0.25), value: isSelected)
                             .overlay(alignment: .topTrailing) {
                                 Button {
                                     tutorialGame = game
@@ -304,11 +329,12 @@ struct RoomView: View {
                                         .padding(Spacing.xs)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("\(game.title) 規則說明")
                             }
                         }
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Spacing.l)
             }
             .scrollIndicators(.hidden)
         }
@@ -325,6 +351,45 @@ struct RoomView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 40)
+    }
+
+    // MARK: - First Mover
+
+    private var firstMoverSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            Text("先後手")
+                .font(.headline)
+                .padding(.horizontal, Spacing.xl)
+
+            VStack(spacing: Spacing.xs) {
+                HStack {
+                    Text("誰先手")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("誰先手", selection: $firstMoverConfig.initial) {
+                        Text("主機先").tag(FirstMoverInitial.host)
+                        Text("對手先").tag(FirstMoverInitial.guest)
+                        Text("隨機").tag(FirstMoverInitial.random)
+                    }
+                    .pickerStyle(.menu)
+                }
+                Divider()
+                HStack {
+                    Text("再來一局")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("輪替", selection: $firstMoverConfig.onRematch) {
+                        Text("固定先後").tag(RematchRotation.fixed)
+                        Text("輪流互換").tag(RematchRotation.alternate)
+                        Text("每局隨機").tag(RematchRotation.random)
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            .padding(Spacing.m)
+            .card(radius: Radius.m, elevation: .low, padding: 0)
+            .padding(.horizontal, Spacing.l)
+        }
     }
 
     // MARK: - Settings Engine

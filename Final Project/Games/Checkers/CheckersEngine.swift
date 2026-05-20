@@ -7,6 +7,18 @@
 
 import SwiftUI
 
+// MARK: - Move Animation Info
+
+struct CheckersMoveInfo: Equatable {
+    let path: [CheckersPosition]      // [start, land1, land2, ..., final]
+    let captures: [CheckersPosition]  // captures[i] eaten between path[i] and path[i+1]
+    let promoted: Bool
+    var from: CheckersPosition { path.first! }
+    var to: CheckersPosition { path.last! }
+}
+
+// MARK: - Engine
+
 @Observable
 final class CheckersEngine: GameEngine {
 
@@ -18,7 +30,8 @@ final class CheckersEngine: GameEngine {
     // MARK: - State
     var model: CheckersModel
     var selectedFrom: CheckersPosition?
-    private(set) var currentValidMoves: [(from: CheckersPosition, to: CheckersPosition, captures: [CheckersPosition])] = []
+    private(set) var currentValidMoves: [(from: CheckersPosition, to: CheckersPosition, path: [CheckersPosition], captures: [CheckersPosition])] = []
+    private(set) var lastMoveInfo: CheckersMoveInfo?
 
     init(variant: CheckersVariant = .american) {
         model = CheckersModel(variant: variant)
@@ -56,6 +69,7 @@ final class CheckersEngine: GameEngine {
     // MARK: - Multiplayer
     var isMultiplayer: Bool = false
     var localPlayer: PlayerColor = .black
+    var opponentName: String? = nil
     var onMoveToSend: ((MessageEnvelope) -> Void)?
     var onRestartRequested: (() -> Void)?
     var nextSendSeq: UInt32 = 1
@@ -88,7 +102,7 @@ final class CheckersEngine: GameEngine {
             return reselect
         }
 
-        executeMove(path: [move.from, move.to], captures: move.captures)
+        executeMove(path: move.path, captures: move.captures)
         return true
     }
 
@@ -101,10 +115,11 @@ final class CheckersEngine: GameEngine {
                                            payload: payload.toData())
             onMoveToSend?(envelope)
         }
-        model.applyMove(path: path, captures: captures)
+        let promoted = model.applyMove(path: path, captures: captures)
+        lastMoveInfo = CheckersMoveInfo(path: path, captures: captures, promoted: promoted)
         selectedFrom = nil
         refreshValidMoves()
-        SoundManager.shared.play(captures.isEmpty ? .placePiece : .opponentMove)
+        SoundManager.shared.play(.placePiece)
     }
 
     // MARK: - Remote Move
@@ -113,9 +128,11 @@ final class CheckersEngine: GameEngine {
         guard let payload = CheckersMovePayload.fromData(data) else { return }
         guard payload.seq == expectedRecvSeq else { onDesyncDetected?(); return }
         expectedRecvSeq &+= 1
-        model.applyMove(path: payload.path, captures: payload.captures)
+        let promoted = model.applyMove(path: payload.path, captures: payload.captures)
+        lastMoveInfo = CheckersMoveInfo(path: payload.path, captures: payload.captures, promoted: promoted)
         selectedFrom = nil
         refreshValidMoves()
+        SoundManager.shared.play(.opponentMove)
     }
 
     // MARK: - Reset
@@ -123,8 +140,15 @@ final class CheckersEngine: GameEngine {
     func reset() {
         model = CheckersModel(variant: model.variant)
         selectedFrom = nil
+        lastMoveInfo = nil
         nextSendSeq = 1
         expectedRecvSeq = 1
+        refreshValidMoves()
+    }
+
+    func applyFirstMover(_ player: PlayerColor) {
+        model.currentPlayer = player
+        lastMoveInfo = nil
         refreshValidMoves()
     }
 
@@ -140,6 +164,7 @@ final class CheckersEngine: GameEngine {
         guard let raw = try? JSONDecoder().decode(String.self, from: data),
               let variant = CheckersVariant(rawValue: raw) else { return }
         model = CheckersModel(variant: variant)
+        lastMoveInfo = nil
         refreshValidMoves()
     }
 

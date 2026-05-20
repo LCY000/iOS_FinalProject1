@@ -21,6 +21,9 @@ final class ChatManager {
     /// auto-dismiss delay, or immediately when the user taps / dismisses it.
     var toastMessage: String?
 
+    /// Number of unread messages received while the chat sheet is closed.
+    private(set) var unreadCount: Int = 0
+
     // MARK: Quick Replies
     static let quickReplies = ["👍", "好棋！", "哈哈", "等一下", "GG", "再來一局"]
 
@@ -51,10 +54,14 @@ final class ChatManager {
     func receiveEnvelope(_ envelope: MessageEnvelope) {
         guard envelope.type == .chat else { return }
         guard let message = ChatMessage.fromData(envelope.payload) else { return }
-        // Override isFromMe since the sender thinks it's "from me"
         let receivedMessage = ChatMessage(text: message.text, isFromMe: false)
         messages.append(receivedMessage)
+        unreadCount += 1
         scheduleToast(for: receivedMessage.text)
+    }
+
+    func markAsRead() {
+        unreadCount = 0
     }
 
     // MARK: Toast
@@ -85,5 +92,6 @@ final class ChatManager {
         toastDismissTask = nil
         messages = []
         toastMessage = nil
+        unreadCount = 0
     }
 }

@@ -70,13 +70,29 @@ struct GameResultOverlay: View {
     }
 
     private func scoreCell(label: String, color: Color, score: Int, stroke: Bool = false) -> some View {
-        VStack(spacing: Spacing.xs) {
-            Circle()
-                .fill(color)
-                .frame(width: 36, height: 36)
-                .overlay {
-                    if stroke { Circle().stroke(.gray, lineWidth: 1) }
-                }
+        let sheenAlpha: Double = stroke ? 0.80 : 0.22
+        let edgeColor: Color = stroke ? Color.gray.opacity(0.40) : Color.black.opacity(0.50)
+        return VStack(spacing: Spacing.xs) {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.20))
+                    .frame(width: 38, height: 38)
+                    .offset(y: 2)
+                Circle()
+                    .fill(color)
+                    .frame(width: 36, height: 36)
+                    .overlay {
+                        Circle()
+                            .fill(RadialGradient(
+                                colors: [Color.white.opacity(sheenAlpha), .clear],
+                                center: UnitPoint(x: 0.33, y: 0.26),
+                                startRadius: 0,
+                                endRadius: 18))
+                    }
+                    .overlay {
+                        Circle().stroke(edgeColor, lineWidth: 1.5)
+                    }
+            }
             Text("\(score)").font(.appNumber)
             Text(label).font(.appCaption).foregroundStyle(.secondary)
         }

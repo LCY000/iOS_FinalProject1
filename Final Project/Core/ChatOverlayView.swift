@@ -74,13 +74,28 @@ struct ChatOverlayView: View {
                         .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                 )
                 .foregroundStyle(.blue)
+                .overlay(alignment: .topTrailing) {
+                    if chatManager.unreadCount > 0 {
+                        Text("\(min(chatManager.unreadCount, 99))")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.red))
+                            .offset(x: 6, y: -6)
+                    }
+                }
             }
             .padding(.bottom, 6)
         }
         .animation(.spring(duration: 0.3), value: chatManager.toastMessage != nil)
+        .animation(.spring(duration: 0.2), value: chatManager.unreadCount)
         .hapticFeedback(.selection, trigger: chatManager.toastMessage)
         .sheet(isPresented: $showChatSheet) {
             chatSheet
+        }
+        .onChange(of: showChatSheet) { _, isShowing in
+            if isShowing { chatManager.markAsRead() }
         }
     }
 
@@ -93,9 +108,22 @@ struct ChatOverlayView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 8) {
-                            ForEach(chatManager.messages) { msg in
-                                chatBubble(msg)
-                                    .id(msg.id)
+                            if chatManager.messages.isEmpty {
+                                VStack(spacing: Spacing.s) {
+                                    Image(systemName: "bubble.left.and.bubble.right")
+                                        .font(.system(size: 36))
+                                        .foregroundStyle(.secondary.opacity(0.5))
+                                    Text("還沒有訊息")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 60)
+                            } else {
+                                ForEach(chatManager.messages) { msg in
+                                    chatBubble(msg)
+                                        .id(msg.id)
+                                }
                             }
                         }
                         .padding(.horizontal, 16)
@@ -145,38 +173,49 @@ struct ChatOverlayView: View {
     private var chatInputBar: some View {
         HStack(spacing: 8) {
             TextField("輸入訊息…", text: $inputText)
-                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color.gray.opacity(0.12))
+                )
                 .onSubmit { sendInput() }
 
             Button {
                 sendInput()
             } label: {
-                Image(systemName: "paperplane.fill")
-                    .foregroundStyle(.white)
-                    .padding(8)
-                    .background(Circle().fill(inputText.isEmpty ? Color.gray : Color.blue))
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(inputText.isEmpty ? Color.gray.opacity(0.4) : Color.blue)
             }
             .disabled(inputText.isEmpty)
+            .animation(.spring(duration: 0.2), value: inputText.isEmpty)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
+        .background(Color(uiColor: .systemBackground))
     }
 
     // MARK: - Chat Bubble
 
     private func chatBubble(_ message: ChatMessage) -> some View {
-        HStack {
-            if message.isFromMe { Spacer() }
-            Text(message.text)
-                .font(.subheadline)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(message.isFromMe ? Color.chatBubbleMine : Color.gray.opacity(0.2))
-                )
-                .foregroundStyle(message.isFromMe ? .white : .primary)
-            if !message.isFromMe { Spacer() }
+        HStack(alignment: .bottom, spacing: Spacing.xs) {
+            if message.isFromMe { Spacer(minLength: 40) }
+            VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 2) {
+                Text(message.text)
+                    .font(.subheadline)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(message.isFromMe ? Color.chatBubbleMine : Color.gray.opacity(0.15))
+                    )
+                    .foregroundStyle(message.isFromMe ? .white : .primary)
+                Text(message.timestamp, style: .time)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            if !message.isFromMe { Spacer(minLength: 40) }
         }
     }
 

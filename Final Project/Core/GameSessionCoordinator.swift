@@ -40,6 +40,12 @@ final class GameSessionCoordinator {
     var showStartGameErrorAlert: Bool = false
     var startGameErrorMessage: String = ""
 
+    // MARK: - First Mover
+
+    var firstMoverConfig: FirstMoverConfig = FirstMoverConfig()
+    private var gameCount: Int = 0
+    private var initialHostIsBlack: Bool = true
+
     // MARK: - Init
 
     init(multipeerManager: MultipeerManager) {
@@ -64,8 +70,14 @@ final class GameSessionCoordinator {
             multipeerManager?.send(envelope: envelope)
         }
         rematchVoting.onAccepted = { [weak self] in
-            self?.engine?.reset()
-            if !(self?.gameStarted ?? true) { self?.gameStarted = true }
+            guard let self, let engine = self.engine else { return }
+            let hostIsBlack = self.nextHostIsBlack()
+            engine.localPlayer = self.multipeerManager.isHost
+                ? (hostIsBlack ? .black : .white)
+                : (hostIsBlack ? .white : .black)
+            engine.reset()
+            engine.applyFirstMover(engine.localPlayer)
+            if !self.gameStarted { self.gameStarted = true }
         }
     }
 
@@ -101,16 +113,23 @@ final class GameSessionCoordinator {
 
     func hostStartGame(game: GameInfo, settingsEngine: (any GameEngine)?) {
         let newEngine: any GameEngine = settingsEngine ?? game.createEngine()
+        let hostIsBlack = nextHostIsBlack()
         newEngine.isMultiplayer = true
-        newEngine.localPlayer = .black
+        newEngine.localPlayer = hostIsBlack ? .black : .white
         wireEngineCallbacks(newEngine)
 
+        newEngine.opponentName = multipeerManager.connectedPeerName
         self.engine = newEngine
         showPeerLeftBanner = false
         rematchVoting.reset()
 
         let settingsData = newEngine.exportSettings()
-        let startInfo = StartGamePayload(gameType: game.gameType, settings: settingsData)
+        let startInfo = StartGamePayload(
+            gameType: game.gameType,
+            settings: settingsData,
+            hostLocalPlayer: newEngine.localPlayer,
+            firstMoverConfig: firstMoverConfig
+        )
         let payload = (try? JSONEncoder().encode(startInfo)) ?? Data()
         let envelope = MessageEnvelope(
             type: .startGame,
@@ -143,6 +162,28 @@ final class GameSessionCoordinator {
     }
 
     // MARK: - Private
+
+    private func nextHostIsBlack() -> Bool {
+        gameCount += 1
+        if gameCount == 1 {
+            let result: Bool
+            switch firstMoverConfig.initial {
+            case .host:   result = true
+            case .guest:  result = false
+            case .random: result = Bool.random()
+            }
+            initialHostIsBlack = result
+            return result
+        }
+        switch firstMoverConfig.onRematch {
+        case .fixed:
+            return initialHostIsBlack
+        case .alternate:
+            return gameCount % 2 == 1 ? initialHostIsBlack : !initialHostIsBlack
+        case .random:
+            return Bool.random()
+        }
+    }
 
     func handleEnvelope(_ envelope: MessageEnvelope) {
         guard envelope.version <= MessageEnvelope.currentVersion else {
@@ -197,7 +238,11 @@ final class GameSessionCoordinator {
         let newEngine = game.createEngine()
         newEngine.applySettings(data: startInfo.settings)
         newEngine.isMultiplayer = true
-        newEngine.localPlayer = .white
+        newEngine.localPlayer = startInfo.hostLocalPlayer == .black ? .white : .black
+        newEngine.opponentName = multipeerManager.connectedPeerName
+        firstMoverConfig = startInfo.firstMoverConfig
+        gameCount = 1
+        initialHostIsBlack = startInfo.hostLocalPlayer == .black
         wireEngineCallbacks(newEngine)
 
         self.engine = newEngine

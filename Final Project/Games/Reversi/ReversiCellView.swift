@@ -68,24 +68,48 @@ struct ReversiCellView: View {
 
                 // Placed piece
                 if displayedState != .empty && !isPending {
-                    Circle()
-                        .fill(displayedState == .black ? Color.pieceBlack : Color.pieceWhite)
-                        .padding(4)
-                        .shadow(color: .black.opacity(0.4), radius: 2, x: 1, y: 1)
-                        .rotation3DEffect(
-                            .degrees(flipDegrees),
-                            axis: (x: 0, y: 1, z: 0)
-                        )
-                        .overlay {
-                            // Last-move marker. Only show once any flip
-                            // animation has settled (flipDegrees == 0) so it
-                            // doesn't rotate with the piece.
-                            if isLastMove && flipDegrees == 0 {
+                    let isBlack = displayedState == .black
+                    let pieceColor: Color = isBlack ? .pieceBlack : .pieceWhite
+                    let edgeColor: Color  = isBlack ? .black.opacity(0.50) : .gray.opacity(0.40)
+                    let sheenAlpha: Double = isBlack ? 0.22 : 0.82
+
+                    ZStack {
+                        // Drop shadow
+                        Circle()
+                            .fill(Color.black.opacity(0.28))
+                            .padding(5)
+                            .offset(y: 2)
+
+                        // Base fill
+                        Circle()
+                            .fill(pieceColor)
+                            .padding(4)
+                            .overlay {
+                                // Specular sheen
                                 Circle()
-                                    .stroke(Color.red, lineWidth: 2)
-                                    .padding(7)
+                                    .fill(RadialGradient(
+                                        colors: [Color.white.opacity(sheenAlpha), .clear],
+                                        center: UnitPoint(x: 0.33, y: 0.26),
+                                        startRadius: 0,
+                                        endRadius: 22))
+                                    .padding(4)
                             }
+                            .overlay {
+                                // Edge stroke
+                                Circle().stroke(edgeColor, lineWidth: 1.5).padding(4)
+                            }
+                    }
+                    .rotation3DEffect(
+                        .degrees(flipDegrees),
+                        axis: (x: 0, y: 1, z: 0)
+                    )
+                    .overlay {
+                        if isLastMove && flipDegrees == 0 {
+                            Circle()
+                                .stroke(Color.accentColor.opacity(0.80), lineWidth: 2)
+                                .padding(7)
                         }
+                    }
                 }
             }
         }

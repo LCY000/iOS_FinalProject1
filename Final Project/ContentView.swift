@@ -19,86 +19,112 @@ let DEBUG_TEST_MODE = false
 struct ContentView: View {
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // MARK: - Header
-                VStack(spacing: 8) {
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.blue, .purple],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+            ZStack(alignment: .top) {
+                // Brand gradient behind content
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.07), Color.purple.opacity(0.04), Color.clear],
+                    startPoint: .top,
+                    endPoint: UnitPoint(x: 0.5, y: 0.50)
+                )
+                .ignoresSafeArea()
 
-                    Text("Game Center")
-                        .font(.largeTitle.bold())
+                VStack(spacing: 0) {
+                    // MARK: - Header
+                    VStack(spacing: Spacing.s) {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 100, height: 100)
+                                .shadow(color: Color.blue.opacity(0.14), radius: 20, y: 6)
+                            Image(systemName: "gamecontroller.fill")
+                                .font(.system(size: 50))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.blue, .purple],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
 
-                    Text("選擇遊玩方式")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, Spacing.xl + Spacing.l + Spacing.xxs)
-                .padding(.bottom, Spacing.xl + Spacing.m)
+                        Text("Game Center")
+                            .font(.largeTitle.bold())
 
-                // MARK: - Mode Selection
-                VStack(spacing: 16) {
-                    NavigationLink {
-                        GamePickerView(mode: .local)
-                    } label: {
-                        modeCard(
-                            icon: "person.2.fill",
-                            title: "單機對戰",
-                            subtitle: "同一台裝置輪流下棋"
-                        )
+                        Text("選擇遊玩方式")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                    .foregroundStyle(.primary)
+                    .padding(.top, Spacing.xl + Spacing.l + Spacing.xxs)
+                    .padding(.bottom, Spacing.xl + Spacing.m)
 
-                    NavigationLink {
-                        LobbyView()
-                    } label: {
-                        modeCard(
-                            icon: "wifi",
-                            title: "連線對戰",
-                            subtitle: "透過藍牙 / Wi-Fi 近距離對戰"
-                        )
-                    }
-                    .foregroundStyle(.primary)
-
-                    // MARK: - Debug Test Mode
-                    if DEBUG_TEST_MODE {
+                    // MARK: - Mode Selection
+                    VStack(spacing: Spacing.m) {
                         NavigationLink {
-                            GamePickerView(mode: .debugTest)
+                            GamePickerView(mode: .local)
                         } label: {
                             modeCard(
-                                icon: "ant.fill",
-                                title: "🛠 測試模式",
-                                subtitle: "模擬雙人連線，一人操作雙方 + 聊天"
+                                icon: "person.2.fill",
+                                title: "單機對戰",
+                                subtitle: "同一台裝置輪流下棋",
+                                tint: .blue
                             )
                         }
                         .foregroundStyle(.primary)
-                    }
-                }
-                .padding(.horizontal, 24)
 
-                Spacer()
+                        NavigationLink {
+                            LobbyView()
+                        } label: {
+                            modeCard(
+                                icon: "wifi",
+                                title: "連線對戰",
+                                subtitle: "透過藍牙 / Wi-Fi 近距離對戰",
+                                tint: .green
+                            )
+                        }
+                        .foregroundStyle(.primary)
+
+                        // MARK: - Debug Test Mode
+                        if DEBUG_TEST_MODE {
+                            NavigationLink {
+                                GamePickerView(mode: .debugTest)
+                            } label: {
+                                modeCard(
+                                    icon: "ant.fill",
+                                    title: "🛠 測試模式",
+                                    subtitle: "模擬雙人連線，一人操作雙方 + 聊天",
+                                    tint: .orange
+                                )
+                            }
+                            .foregroundStyle(.primary)
+                        }
+                    }
+                    .padding(.horizontal, Spacing.l)
+
+                    Spacer()
+                }
             }
             .animatedEntrance()
         }
     }
 
-    private func modeCard(icon: String, title: String, subtitle: String) -> some View {
+    private func modeCard(icon: String, title: String, subtitle: String, tint: Color) -> some View {
         HStack(spacing: Spacing.m) {
-            Image(systemName: icon)
-                .font(.system(size: 28))
-                .frame(width: 44)
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(0.12))
+                    .frame(width: 48, height: 48)
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundStyle(tint)
+            }
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title).font(.appButton)
                 Text(subtitle).font(.appCaption).foregroundStyle(.secondary)
             }
             Spacer()
-            Image(systemName: "chevron.right").foregroundStyle(.secondary)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
         }
         .card(radius: Radius.l, elevation: .mid, padding: Spacing.l)
     }
@@ -124,7 +150,7 @@ struct GamePickerView: View {
         ScrollView {
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 150, maximum: 200))],
-                spacing: 16
+                spacing: Spacing.m
             ) {
                 ForEach(GameRegistry.availableGames) { game in
                     Button {
@@ -133,17 +159,28 @@ struct GamePickerView: View {
                         selectedGame = game
                         showSettings = true
                     } label: {
+                        let (c1, c2) = gameGradient(for: game)
                         VStack(spacing: Spacing.s) {
-                            Image(systemName: game.icon)
-                                .font(.system(size: 36))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.green, .teal],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [c1.opacity(0.15), c2.opacity(0.08)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
-                                .frame(height: 44)
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: game.icon)
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [c1, c2],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
                             Text(game.title).font(.appButton)
                         }
                         .frame(maxWidth: .infinity)
@@ -152,8 +189,8 @@ struct GamePickerView: View {
                     .foregroundStyle(.primary)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, Spacing.l)
+            .padding(.top, Spacing.m)
         }
         .animatedEntrance()
         .navigationTitle("選擇遊戲")
@@ -162,6 +199,16 @@ struct GamePickerView: View {
             if let engine = selectedEngine, let game = selectedGame {
                 GameSettingsView(engine: engine, game: game, mode: mode)
             }
+        }
+    }
+
+    private func gameGradient(for game: GameInfo) -> (Color, Color) {
+        switch game.gameType {
+        case "reversi":  return (.purple, .pink)
+        case "gomoku":   return (.teal, .green)
+        case "quoridor": return (.blue, .indigo)
+        case "checkers": return (.orange, .yellow)
+        default:         return (.blue, .teal)
         }
     }
 }
@@ -176,14 +223,30 @@ struct GameSettingsView: View {
     @State private var navigateToGame = false
     @State private var chatManager = ChatManager()
     @State private var showTutorial = false
+    @State private var firstPlayer: PlayerColor = .black
+
+    private var gameAccentColor: Color {
+        switch type(of: engine).gameType {
+        case "reversi":  return .purple
+        case "gomoku":   return .teal
+        case "quoridor": return .blue
+        case "checkers": return .orange
+        default:         return .blue
+        }
+    }
 
     var body: some View {
         VStack(spacing: 24) {
             // Game icon & title
             VStack(spacing: 8) {
-                Image(systemName: type(of: engine).gameIcon)
-                    .font(.system(size: 40))
-                    .foregroundStyle(.blue)
+                ZStack {
+                    Circle()
+                        .fill(gameAccentColor.opacity(0.12))
+                        .frame(width: 80, height: 80)
+                    Image(systemName: type(of: engine).gameIcon)
+                        .font(.system(size: 38))
+                        .foregroundStyle(gameAccentColor)
+                }
                 Text(type(of: engine).gameTitle)
                     .font(.title2.bold())
             }
@@ -191,6 +254,19 @@ struct GameSettingsView: View {
 
             // Game-specific settings
             engine.makeSettingsView()
+
+            if mode == .local {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("先手")
+                        .font(.headline)
+                    Picker("先手", selection: $firstPlayer) {
+                        Text("黑方先").tag(PlayerColor.black)
+                        Text("白方先").tag(PlayerColor.white)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .padding(.horizontal, Spacing.l)
+            }
 
             if mode == .debugTest {
                 VStack(spacing: Spacing.xxs) {
@@ -212,6 +288,7 @@ struct GameSettingsView: View {
 
             // Start button
             Button("開始遊戲") {
+                engine.applyFirstMover(firstPlayer)
                 navigateToGame = true
             }
             .buttonStyle(PrimaryActionButtonStyle(tint: .green))

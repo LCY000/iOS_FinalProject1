@@ -27,11 +27,14 @@ final class GomokuEngine: GameEngine {
         self.model = GomokuModel(rules: defaultRules)
     }
 
+    // MARK: - Session Wins (persists across rematches within a session)
+    private(set) var sessionWins: (black: Int, white: Int) = (0, 0)
+
     // MARK: - GameEngine State
 
     var currentPlayer: PlayerColor { model.currentPlayer }
 
-    var scores: (black: Int, white: Int) { model.score() }
+    var scores: (black: Int, white: Int) { sessionWins }
 
     var isGameOver: Bool { model.isGameOver }
 
@@ -68,6 +71,7 @@ final class GomokuEngine: GameEngine {
 
     var isMultiplayer: Bool = false
     var localPlayer: PlayerColor = .black
+    var opponentName: String? = nil
     var onMoveToSend: ((MessageEnvelope) -> Void)?
     var onRestartRequested: (() -> Void)?
     var nextSendSeq: UInt32 = 1
@@ -116,6 +120,7 @@ final class GomokuEngine: GameEngine {
         expectedRecvSeq &+= 1
         SoundManager.shared.play(.opponentMove)
         _ = model.placePiece(row: move.row, col: move.col)
+        recordWinIfNeeded()
     }
 
     func reset() {
@@ -123,6 +128,11 @@ final class GomokuEngine: GameEngine {
         pendingMove = nil
         nextSendSeq = 1
         expectedRecvSeq = 1
+    }
+
+    func applyFirstMover(_ player: PlayerColor) {
+        model.currentPlayer = player
+        pendingMove = nil
     }
 
     // MARK: - Settings
@@ -160,6 +170,13 @@ final class GomokuEngine: GameEngine {
 
     private func executePlacement(row: Int, col: Int) {
         guard model.placePiece(row: row, col: col) else { return }
+        recordWinIfNeeded()
         sendMoveEnvelope(row: row, col: col, gameType: GomokuEngine.gameType)
+    }
+
+    private func recordWinIfNeeded() {
+        guard let winner = model.winner else { return }
+        if winner == .black { sessionWins.black += 1 }
+        else { sessionWins.white += 1 }
     }
 }

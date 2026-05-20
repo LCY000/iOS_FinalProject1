@@ -16,14 +16,15 @@ private struct AnimatedEntranceModifier: ViewModifier {
     var delay: Double = 0
     var offsetY: CGFloat = 14
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
 
     func body(content: Content) -> some View {
         content
             .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : offsetY)
+            .offset(y: (appeared || reduceMotion) ? 0 : offsetY)
             .onAppear {
-                withAnimation(.easeOut(duration: 0.35).delay(delay)) {
+                withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.35).delay(delay)) {
                     appeared = true
                 }
             }

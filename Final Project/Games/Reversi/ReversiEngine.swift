@@ -62,6 +62,7 @@ final class ReversiEngine: GameEngine {
 
     var isMultiplayer: Bool = false
     var localPlayer: PlayerColor = .black
+    var opponentName: String? = nil
     var onMoveToSend: ((MessageEnvelope) -> Void)?
     var onRestartRequested: (() -> Void)?
     var nextSendSeq: UInt32 = 1
@@ -120,6 +121,11 @@ final class ReversiEngine: GameEngine {
         pendingMove = nil
         nextSendSeq = 1
         expectedRecvSeq = 1
+    }
+
+    func applyFirstMover(_ player: PlayerColor) {
+        model.currentPlayer = player
+        pendingMove = nil
     }
 
     // MARK: - Settings

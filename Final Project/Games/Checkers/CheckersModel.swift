@@ -236,17 +236,15 @@ extension CheckersModel {
         return all
     }
 
-    func validMoves(for player: PlayerColor) -> [(from: CheckersPosition, to: CheckersPosition, captures: [CheckersPosition])] {
-        let captures = allCaptureSequences(for: player)
-        if !captures.isEmpty {
-            return captures.map { seq in
-                let from = seq.first!.from
-                let to   = seq.last!.to
-                let caps = seq.map(\.over)
-                return (from: from, to: to, captures: caps)
+    func validMoves(for player: PlayerColor) -> [(from: CheckersPosition, to: CheckersPosition, path: [CheckersPosition], captures: [CheckersPosition])] {
+        let captureSeqs = allCaptureSequences(for: player)
+        if !captureSeqs.isEmpty {
+            return captureSeqs.map { seq in
+                let path = [seq.first!.from] + seq.map(\.to)
+                return (from: seq.first!.from, to: seq.last!.to, path: path, captures: seq.map(\.over))
             }
         }
-        return simpleMoves(for: player).map { (from: $0.0, to: $0.1, captures: []) }
+        return simpleMoves(for: player).map { (from: $0.0, to: $0.1, path: [$0.0, $0.1], captures: []) }
     }
 }
 

@@ -95,18 +95,42 @@ struct GomokuBoardCanvas: View {
                     context.fill(Path(ellipseIn: rect), with: .color(previewColor))
                     context.stroke(Path(ellipseIn: rect), with: .color(.yellow), lineWidth: 2)
                 } else if state != .empty {
-                    let stoneColor: Color = state == .black ? .pieceBlack : .pieceWhite
+                    let isBlack = state == .black
+                    let stoneColor: Color = isBlack ? .pieceBlack : .pieceWhite
                     let rect = CGRect(x: cx - stoneR, y: cy - stoneR,
                                       width: stoneR * 2, height: stoneR * 2)
+
+                    // Shadow pass
                     var shadowCtx = context
-                    shadowCtx.addFilter(.shadow(color: Color.black.opacity(0.3), radius: 1, x: 0.5, y: 0.5))
+                    shadowCtx.addFilter(.shadow(color: Color.black.opacity(0.32), radius: 2, x: 0.5, y: 1.5))
                     shadowCtx.fill(Path(ellipseIn: rect), with: .color(stoneColor))
 
+                    // Base fill
+                    context.fill(Path(ellipseIn: rect), with: .color(stoneColor))
+
+                    // Edge stroke
+                    let edgeColor: Color = isBlack ? Color.black.opacity(0.50) : Color.gray.opacity(0.38)
+                    context.stroke(Path(ellipseIn: rect), with: .color(edgeColor), lineWidth: 1.0)
+
+                    // Specular sheen (top-left radial gradient)
+                    let sheenAlpha: Double = isBlack ? 0.22 : 0.80
+                    let sheenCenter = CGPoint(x: cx - stoneR * 0.22, y: cy - stoneR * 0.28)
+                    context.fill(
+                        Path(ellipseIn: rect),
+                        with: .radialGradient(
+                            Gradient(colors: [Color.white.opacity(sheenAlpha), .clear]),
+                            center: sheenCenter,
+                            startRadius: 0,
+                            endRadius: stoneR * 0.78
+                        )
+                    )
+
+                    // Last-move marker: small accent dot in the center
                     if isLastMove {
-                        let inset: CGFloat = 4
-                        let mr = CGRect(x: cx - stoneR + inset, y: cy - stoneR + inset,
-                                        width: (stoneR - inset) * 2, height: (stoneR - inset) * 2)
-                        context.stroke(Path(ellipseIn: mr), with: .color(.red), lineWidth: 1.5)
+                        let dotR: CGFloat = stoneR * 0.22
+                        let dotRect = CGRect(x: cx - dotR, y: cy - dotR, width: dotR * 2, height: dotR * 2)
+                        let dotColor: Color = isBlack ? Color.white.opacity(0.70) : Color.black.opacity(0.45)
+                        context.fill(Path(ellipseIn: dotRect), with: .color(dotColor))
                     }
                 }
             }

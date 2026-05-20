@@ -5,12 +5,26 @@ struct QuoridorGameView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var flipBoard: Bool {
-        engine.isMultiplayer && engine.localPlayer == .white
+        engine.isMultiplayer && engine.localPlayer == .black
     }
 
     private var isLocalWinner: Bool {
         guard let w = engine.model.winner else { return false }
         return engine.isMultiplayer ? w == engine.localPlayer : true
+    }
+
+    private var blackPlayerName: String {
+        guard engine.isMultiplayer else { return "黑方" }
+        return engine.localPlayer == .black
+            ? PlayerNameProvider.broadcastName
+            : (engine.opponentName ?? "對手")
+    }
+
+    private var whitePlayerName: String {
+        guard engine.isMultiplayer else { return "白方" }
+        return engine.localPlayer == .white
+            ? PlayerNameProvider.broadcastName
+            : (engine.opponentName ?? "對手")
     }
 
     var body: some View {
@@ -29,8 +43,7 @@ struct QuoridorGameView: View {
                     flipBoard: flipBoard,
                     inputMode: engine.inputMode,
                     selectedPawn: engine.selectedPawn,
-                    validMoves: engine.inputMode == .pawn
-                        ? engine.model.validPawnMoves(for: engine.currentPlayer) : [],
+                    validMoves: engine.inputMode == .pawn ? engine.cachedValidPawnMoves : [],
                     wallPreview: engine.wallPreview,
                     onTapCell: { r, c in engine.handleTap(row: r, col: c) },
                     onTapWallSlot: { r, c in engine.handleWallTap(row: r, col: c) }
@@ -67,7 +80,9 @@ struct QuoridorGameView: View {
                     isWinner: isLocalWinner,
                     isDraw: false,
                     winnerLabel: engine.isMultiplayer
-                        ? (engine.model.winner == engine.localPlayer ? "你" : "對手")
+                        ? (engine.model.winner == engine.localPlayer
+                            ? PlayerNameProvider.broadcastName
+                            : (engine.opponentName ?? "對手"))
                         : (engine.model.winner?.displayName ?? ""),
                     blackScore: 0,
                     whiteScore: 0,
@@ -86,37 +101,60 @@ struct QuoridorGameView: View {
 
     private var wallCountBar: some View {
         HStack(spacing: Spacing.l) {
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: "square.fill")
-                    .foregroundStyle(Color.pieceBlack)
-                Text("牆 \(engine.model.wallCounts[.black, default: 0])")
-                    .font(.appNumber)
-                    .contentTransition(.numericText())
-            }
-            .padding(.horizontal, Spacing.m)
-            .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule().fill(engine.model.currentPlayer == .black
-                    ? Color.primary.opacity(0.12) : Color.clear)
+            wallCell(
+                isBlack: true,
+                wallCount: engine.model.wallCounts[.black, default: 0],
+                isActive: engine.model.currentPlayer == .black,
+                activeFill: Color.primary.opacity(0.12),
+                name: blackPlayerName
             )
-            .animation(.spring(duration: 0.3), value: engine.model.currentPlayer)
 
             Text("vs").font(.appCaption).foregroundStyle(.secondary)
 
+            wallCell(
+                isBlack: false,
+                wallCount: engine.model.wallCounts[.white, default: 0],
+                isActive: engine.model.currentPlayer == .white,
+                activeFill: Color.gray.opacity(0.15),
+                name: whitePlayerName
+            )
+        }
+    }
+
+    private func wallCell(
+        isBlack: Bool, wallCount: Int,
+        isActive: Bool, activeFill: Color, name: String
+    ) -> some View {
+        VStack(spacing: 2) {
             HStack(spacing: Spacing.xs) {
-                Image(systemName: "square.fill")
-                    .foregroundStyle(Color.pieceWhite)
-                Text("牆 \(engine.model.wallCounts[.white, default: 0])")
-                    .font(.appNumber)
-                    .contentTransition(.numericText())
+                // Wall icon — use outlined+filled for white so it's visible on light backgrounds
+                ZStack {
+                    Image(systemName: "square.fill")
+                        .foregroundStyle(isBlack ? Color.pieceBlack : Color.pieceWhite)
+                    if !isBlack {
+                        Image(systemName: "square")
+                            .foregroundStyle(Color.gray.opacity(0.5))
+                    }
+                }
+                HStack(alignment: .lastTextBaseline, spacing: 2) {
+                    Text("\(wallCount)")
+                        .font(.appNumber)
+                        .contentTransition(.numericText())
+                    Text("牆")
+                        .font(.appCaption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, Spacing.m)
             .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule().fill(engine.model.currentPlayer == .white
-                    ? Color.gray.opacity(0.15) : Color.clear)
-            )
+            .background(Capsule().fill(isActive ? activeFill : .clear))
             .animation(.spring(duration: 0.3), value: engine.model.currentPlayer)
+
+            Text(name)
+                .font(.appCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: 100)
         }
     }
 
@@ -132,6 +170,7 @@ struct QuoridorGameView: View {
             .pickerStyle(.segmented)
             .frame(maxWidth: 200)
             .disabled(engine.isGameOver ||
+                      engine.pendingWall != nil ||
                       (engine.isMultiplayer && engine.currentPlayer != engine.localPlayer) ||
                       engine.model.wallCounts[engine.currentPlayer, default: 0] == 0)
 
@@ -145,9 +184,24 @@ struct QuoridorGameView: View {
                 }
                 .buttonStyle(PillButtonStyle(tint: .green))
                 .transition(.scale.combined(with: .opacity))
+            } else if engine.pendingWall != nil {
+                HStack(spacing: Spacing.s) {
+                    Button { engine.cancelMove() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.red)
+                    }
+                    .accessibilityLabel("取消放牆")
+
+                    Button { engine.confirmMove() } label: {
+                        Label("確認放牆", systemImage: "checkmark")
+                    }
+                    .buttonStyle(PillButtonStyle(tint: .green))
+                }
+                .transition(.scale.combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.2), value: engine.isGameOver)
+        .animation(.spring(duration: 0.2), value: engine.isGameOver || engine.pendingWall != nil)
         .frame(height: 36)
     }
 }

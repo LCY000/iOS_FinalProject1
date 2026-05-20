@@ -14,6 +14,7 @@ struct LobbyView: View {
     @State private var navigateToRoom = false
     @State private var showNicknamePrompt = PlayerNameProvider.needsOnboarding
     @State private var draftNickname: String = ""
+    @State private var dotPulsing = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -155,11 +156,30 @@ struct LobbyView: View {
 
     // MARK: - Status Badge
 
+    private var isActiveDot: Bool {
+        switch multipeerManager.connectionState {
+        case .hosting, .browsing, .connecting: return true
+        default: return false
+        }
+    }
+
     private var statusBadge: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 10, height: 10)
+            ZStack {
+                // Sonar ripple for active states
+                Circle()
+                    .fill(statusColor.opacity(0.30))
+                    .frame(width: 10, height: 10)
+                    .scaleEffect(dotPulsing ? 2.6 : 1.0)
+                    .opacity(dotPulsing ? 0 : 0.7)
+                    .animation(.easeOut(duration: 1.0).repeatForever(autoreverses: false), value: dotPulsing)
+                    .opacity(isActiveDot ? 1 : 0)
+                    .animation(.easeOut(duration: 0.3), value: isActiveDot)
+
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 10, height: 10)
+            }
             Text(multipeerManager.connectionState.rawValue)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -170,6 +190,7 @@ struct LobbyView: View {
             Capsule()
                 .fill(statusColor.opacity(0.1))
         )
+        .onAppear { dotPulsing = true }
     }
 
     private var statusColor: Color {

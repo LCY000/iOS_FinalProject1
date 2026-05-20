@@ -20,9 +20,25 @@ struct GomokuGameView: View {
     private var winnerLabel: String {
         guard let winner = engine.model.winner else { return "" }
         if engine.isMultiplayer {
-            return winner == engine.localPlayer ? "你" : "對手"
+            return winner == engine.localPlayer
+                ? PlayerNameProvider.broadcastName
+                : (engine.opponentName ?? "對手")
         }
         return winner.displayName
+    }
+
+    private var blackPlayerName: String {
+        guard engine.isMultiplayer else { return "黑方" }
+        return engine.localPlayer == .black
+            ? PlayerNameProvider.broadcastName
+            : (engine.opponentName ?? "對手")
+    }
+
+    private var whitePlayerName: String {
+        guard engine.isMultiplayer else { return "白方" }
+        return engine.localPlayer == .white
+            ? PlayerNameProvider.broadcastName
+            : (engine.opponentName ?? "對手")
     }
 
     // Zoom state
@@ -115,41 +131,60 @@ struct GomokuGameView: View {
         .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
     }
 
-    // MARK: - Score Bar
+    // MARK: - Score Bar (shows session wins)
 
     private var scoreBar: some View {
         HStack(spacing: Spacing.l) {
-            HStack(spacing: Spacing.xs) {
-                Circle()
-                    .fill(Color.pieceBlack)
-                    .stroke(Color.pieceWhite, lineWidth: 1)
-                    .frame(width: 22, height: 22)
-                Text("\(engine.scores.black)").font(.appNumber)
-            }
-            .padding(.horizontal, Spacing.m)
-            .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule()
-                    .fill(engine.currentPlayer == .black
-                          ? Color.primary.opacity(0.12) : Color.clear)
+            winsCell(
+                pieceColor: .pieceBlack, strokeColor: .pieceWhite,
+                wins: engine.scores.black,
+                isActive: engine.currentPlayer == .black,
+                activeFill: Color.primary.opacity(0.12),
+                name: blackPlayerName
             )
 
             Text("vs").font(.appCaption).foregroundStyle(.secondary)
 
+            winsCell(
+                pieceColor: .pieceWhite, strokeColor: .gray,
+                wins: engine.scores.white,
+                isActive: engine.currentPlayer == .white,
+                activeFill: Color.gray.opacity(0.15),
+                name: whitePlayerName
+            )
+        }
+    }
+
+    private func winsCell(
+        pieceColor: Color, strokeColor: Color,
+        wins: Int, isActive: Bool, activeFill: Color,
+        name: String
+    ) -> some View {
+        VStack(spacing: 2) {
             HStack(spacing: Spacing.xs) {
                 Circle()
-                    .fill(Color.pieceWhite)
-                    .stroke(Color.gray, lineWidth: 1)
+                    .fill(pieceColor)
+                    .stroke(strokeColor, lineWidth: 1)
                     .frame(width: 22, height: 22)
-                Text("\(engine.scores.white)").font(.appNumber)
+                HStack(alignment: .lastTextBaseline, spacing: 2) {
+                    Text("\(wins)")
+                        .font(.appNumber)
+                        .contentTransition(.numericText())
+                    Text("勝")
+                        .font(.appCaption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, Spacing.m)
             .padding(.vertical, Spacing.xs)
-            .background(
-                Capsule()
-                    .fill(engine.currentPlayer == .white
-                          ? Color.gray.opacity(0.15) : Color.clear)
-            )
+            .background(Capsule().fill(isActive ? activeFill : .clear))
+            .animation(.spring(duration: 0.3), value: engine.currentPlayer)
+
+            Text(name)
+                .font(.appCaption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: 100)
         }
     }
 
