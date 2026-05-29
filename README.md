@@ -6,6 +6,25 @@
 
 這是一個以**高擴充性**為目標的 iOS 原生雙人對戰平台。玩家可在無網際網路的狀況下，透過 Wi-Fi 直連或藍牙（Bluetooth LE）尋找附近玩家，建立房間並進行多款棋盤遊戲。
 
+## 📱 截圖
+
+<table align="center" border="0" cellspacing="12" cellpadding="0">
+  <tr>
+    <td align="center" valign="bottom"><img src="docs/screenshots/home.png" width="160" alt="首頁"/></td>
+    <td align="center" valign="bottom"><img src="docs/screenshots/room-host.png" width="160" alt="遊戲房間（房主）"/></td>
+    <td align="center" valign="bottom"><img src="docs/screenshots/room-guest.png" width="160" alt="遊戲房間（等待中）"/></td>
+    <td align="center" valign="bottom"><img src="docs/screenshots/checkers-game.png" width="160" alt="西洋跳棋對戰"/></td>
+    <td align="center" valign="bottom"><img src="docs/screenshots/checkers-chat.png" width="160" alt="遊戲內聊天"/></td>
+  </tr>
+  <tr>
+    <td align="center" valign="middle"><b>首頁</b></td>
+    <td align="center" valign="middle"><b>房間（房主）</b></td>
+    <td align="center" valign="middle"><b>房間（等待中）</b></td>
+    <td align="center" valign="middle"><b>西洋跳棋</b></td>
+    <td align="center" valign="middle"><b>遊戲內聊天</b></td>
+  </tr>
+</table>
+
 ---
 
 ## 🌟 核心特色
