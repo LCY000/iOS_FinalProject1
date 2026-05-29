@@ -152,9 +152,39 @@ Final Project/
 
 ## 📋 版本紀錄
 
-### v0.5.0 — 跳棋完善、介面優化
+### v0.5.0 — 新增步步為營、西洋跳棋、教學系統與全面 UX 優化
 
-**西洋跳棋 UX**
+**教學系統**
+- 新增 `TutorialContent` 資料結構（`overview` + `[TutorialSection]`），整合進 `GameInfo`
+- 新增 `TutorialView` 可滾動教學 sheet（`.medium` / `.large` detent）
+- 遊戲選擇卡片右上角加 `ⓘ` 按鈕，房主與 Guest 皆可隨時查閱規則
+- 補全四款遊戲的完整教學文字（規則、限制、操作說明）
+
+**步步為營 Quoridor — 全新遊戲**
+- `QuoridorModel`：9×9 棋盤資料結構，棋子 + 牆壁狀態，BFS 通道驗證（O(1) dequeue 優化）
+- 移動規則：上下左右移動、跳棋（含側跳）
+- 牆壁規則：橫牆 / 縱牆各佔兩格，系統自動阻擋讓任一方無路可走的非法放置
+- `QuoridorEngine`：完整 `GameEngine` 協議實作，含多人序列號 desync 防護
+- `QuoridorBoardCanvas`：單一 `Canvas` 渲染棋盤格線、牆壁、棋子，效能優先
+- `QuoridorGameView`：橫牆 / 縱牆模式切換，多人時自動翻轉視角，讓雙方均從畫面下方出發
+- `QuoridorModel` 單元測試（`QuoridorModelTests`）
+
+**西洋跳棋 Checkers — 全新遊戲**
+- `CheckersModel`：支援美式（8×8）與國際（10×10，飛王）雙規則
+- 移動規則：強制吃子、多段連跳 DFS、升王（到達底線），國際規則需選最多吃子路線
+- `CheckersEngine`：完整 `GameEngine` 協議實作，含多人序列號 desync 防護
+- `CheckersBoardCanvas`：棋盤格 + 棋子 + 王（金色星形）逐步動畫，SpringAnimation 彈跳移動，被吃棋子縮小消失
+- `CheckersGameView`：計分欄、狀態列、底部工具列
+- 棋盤顏色資產（深棕 + 米色格子）與王冠金色 token
+- `CheckersModel` 單元測試（`CheckersModelTests`）
+
+**遊戲整合與視覺設計**
+- 四款遊戲全部接入 `GameRegistry`，`makeGameView()` 正確路由到對應 View
+- Checkers & Quoridor 完整視覺設計：對戰計分欄（棋子數 / 剩餘牆壁）、玩家名稱、勝負覆層
+- 全遊戲統一 polish：對手名稱顯示、計分動畫、聊天未讀徽章、音效接入、UX 細節修正
+- 各遊戲 `makeSettingsView()` 設定同步邏輯修正
+
+**西洋跳棋 UX 細節**
 - 強制吃子視覺提示：可吃棋子顯示橘色圓環；只有一種吃法時自動選取，直接展示目的地
 - 音效語意分離：普通移動（`.placePiece`）vs 吃子（`.capture`）vs 升王（`.promote`，由 Canvas 動畫結束後播放，消除重複）
 
@@ -163,13 +193,13 @@ Final Project/
 
 **房間**
 - 遊戲設定改用 ScrollView，開始按鈕固定於底部，設定再多也不會被擠出螢幕
-- ChatOverlayView 限制在 ScrollView 範圍，聊天按鈕不再蓋住開始按鈕
+- `ChatOverlayView` 限制在 ScrollView 範圍內層 ZStack，聊天按鈕不再蓋住開始按鈕
 - Guest 等待畫面改為可瀏覽的遊戲介紹卡片，每張卡片附規則 / 教學按鈕
 
 **聊天 Toast**
-- Toast 重新設計：藍色小圓點 + regularMaterial 磨砂背景，與聊天按鈕（bubble icon + ultraThinMaterial）明顯區分
+- Toast 重新設計：藍色小圓點 + `.regularMaterial` 磨砂背景，與聊天按鈕（bubble icon + `.ultraThinMaterial`）明顯區分
 
-**安全性**
+**安全性與品質**
 - `CheckersMoveInfo.from` / `.to` 強制解包改為 nil-coalescing 安全預設值
 - `.claude/` 及 `docs/superpowers/` 加入 `.gitignore`
 
