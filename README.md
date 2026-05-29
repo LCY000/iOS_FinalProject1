@@ -29,7 +29,7 @@
 
 ## 🌟 核心特色
 
-- **雙模式離線對戰**：支援 `MultipeerConnectivity`（Wi-Fi Direct）及 `CoreBluetooth`（BLE）兩種傳輸，連飛航模式也能對戰。
+- **雙模式連線**：支援 `MultipeerConnectivity`（Wi-Fi Direct）及 `CoreBluetooth`（BLE）兩種傳輸。**實機對戰請使用藍牙模式**（預設）；Wi-Fi Direct 在模擬器穩定，實機需同一 Wi-Fi 網路才可用。
 - **模組化遊戲架構**：獨創 `GameEngine` 協議，加入新遊戲只需實作一個協議 + 一行 `GameRegistry` 登記，大廳、房間、聊天、音效、投票系統全部自動接入。
 - **可靠的 BLE 傳輸**：4-byte 大端長度前置 + 逐包重組緩衝 + 2 秒超時自動重置，確保大訊息跨 MTU 分包也不遺失。
 - **持久化暱稱系統**：大廳畫面常駐暱稱欄，首次進入自動展開輸入框，之後可隨時修改，廣播名稱以此為準，不洩漏裝置真實名稱。
@@ -166,6 +166,15 @@ Final Project/
 - **測試**：`⌘U`；壓力測試需設 Scheme 環境變數 `BT_STRESS_ENABLED=1`
 - **測試模式**：`ContentView.swift` 第 13 行設 `DEBUG_TEST_MODE = true` 啟用單機雙人模擬
 - **加入新遊戲**：在 `Games/<Name>/` 建立 Model / Engine / View，然後在 `GameRegistry.swift` 加一行 `GameInfo(...)` 即完成
+
+### ⚠️ 連線模式說明
+
+| 模式 | 模擬器 | 實機（同 Wi-Fi） | 實機（不同網路） |
+|------|--------|----------------|----------------|
+| **藍牙（BLE）** ✅ 預設 | ✅ | ✅ | ✅ |
+| Wi-Fi Direct | ✅ | ✅ | ❌ |
+
+**實機對戰一律建議使用藍牙模式。** Wi-Fi Direct（MultipeerConnectivity）在實機上僅於雙方連接同一 Wi-Fi 時有效，若兩台手機使用各自行動網路、不同 Wi-Fi、或一方開啟飛航模式，均無法配對。
 
 ---
 

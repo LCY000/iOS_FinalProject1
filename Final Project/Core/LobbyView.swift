@@ -254,12 +254,25 @@ struct LobbyView: View {
             Picker("連線方式", selection: $multipeerManager.connectionMode) {
                 ForEach(ConnectionMode.allCases, id: \.self) { mode in
                     Label(mode.rawValue,
-                          systemImage: mode == .wifi ? "wifi" : "airplane")
+                          systemImage: mode == .wifi ? "wifi" : "wave.3.right")
                         .tag(mode)
                 }
             }
             .pickerStyle(.segmented)
             .disabled(!canChangeMode)
+
+            HStack(alignment: .top, spacing: Spacing.xs) {
+                Image(systemName: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 1)
+                Text(multipeerManager.connectionMode == .bluetooth
+                     ? "藍牙（BLE）適用於實機對戰，不需同一 Wi-Fi。"
+                     : "Wi-Fi Direct 僅在模擬器或同一 Wi-Fi 網路下穩定，實機建議改用藍牙。")
+                    .font(.caption)
+                    .foregroundStyle(multipeerManager.connectionMode == .wifi ? .orange : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Button {
                 multipeerManager.hostGame()

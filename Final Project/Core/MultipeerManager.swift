@@ -14,8 +14,8 @@ import OSLog
 // MARK: - Connection Mode
 
 enum ConnectionMode: String, CaseIterable {
-    case wifi      = "WiFi"
     case bluetooth = "藍牙"
+    case wifi      = "WiFi"
 }
 
 // MARK: - Connection State
@@ -41,7 +41,7 @@ final class MultipeerManager: NSObject {
     var discoveredPeers: [DiscoveredPeer] = []
     var connectedPeerName: String?
     var isHost: Bool = false
-    var connectionMode: ConnectionMode = .wifi
+    var connectionMode: ConnectionMode = .bluetooth
     var transportError: TransportError?
     var hasTransportError: Bool {
         get { transportError != nil }
