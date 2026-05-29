@@ -43,6 +43,7 @@ struct CheckersGameView: View {
                     validDestinations: engine.validDestinations,
                     selectedFrom: engine.selectedFrom,
                     lastMoveInfo: engine.lastMoveInfo,
+                    forcedCaptureSources: engine.forcedCaptureSources,
                     onTap: { r, c in engine.handleTap(row: r, col: c) }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radius.s))

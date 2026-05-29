@@ -15,6 +15,7 @@ enum SoundEvent {
     case gameOver      // game ended (win/lose/draw)
     case connect       // peer connected
     case disconnect    // peer disconnected
+    case capture       // piece captured in Checkers (heavier impact)
     case wallPlace     // wall placed in Quoridor (heavier than a piece move)
     case promote       // piece promoted to king in Checkers
 
@@ -25,6 +26,7 @@ enum SoundEvent {
         case .gameOver:     return 1025
         case .connect:      return 1117
         case .disconnect:   return 1006
+        case .capture:      return 1105
         case .wallPlace:    return 1105
         case .promote:      return 1109
         }

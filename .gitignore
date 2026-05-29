@@ -51,3 +51,9 @@ fastlane/test_output
 # Logs & temporary files
 *.log
 tmp/
+
+# Claude Code workspace
+.claude/
+
+# Planning / design docs (not part of source)
+docs/superpowers/

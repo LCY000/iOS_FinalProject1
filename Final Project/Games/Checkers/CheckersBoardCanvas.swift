@@ -20,6 +20,7 @@ struct CheckersBoardCanvas: View {
     let validDestinations: [CheckersPosition]
     let selectedFrom: CheckersPosition?
     let lastMoveInfo: CheckersMoveInfo?
+    let forcedCaptureSources: [CheckersPosition]
     let onTap: (Int, Int) -> Void
 
     @State private var pieces: [AnimatedPiece] = []
@@ -97,6 +98,19 @@ struct CheckersBoardCanvas: View {
     }
 
     private func drawHighlights(ctx: GraphicsContext) {
+        // Orange ring on pieces that MUST capture (shown only when nothing is selected)
+        if selectedFrom == nil {
+            for pos in forcedCaptureSources {
+                let d = flipped(pos)
+                let cx = CGFloat(d.col) * cellSize + cellSize / 2
+                let cy = CGFloat(d.row) * cellSize + cellSize / 2
+                let r = cellSize * 0.43
+                let rect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
+                ctx.stroke(Path(ellipseIn: rect),
+                           with: .color(Color.orange.opacity(0.90)), lineWidth: 2.5)
+            }
+        }
+
         if let sel = selectedFrom {
             let d = flipped(sel)
             let rect = CGRect(

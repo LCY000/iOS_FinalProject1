@@ -12,14 +12,17 @@ import SwiftUI
 struct LobbyView: View {
     @State private var multipeerManager = MultipeerManager()
     @State private var navigateToRoom = false
-    @State private var showNicknamePrompt = PlayerNameProvider.needsOnboarding
     @State private var draftNickname: String = ""
+    @State private var isEditingNickname = false
     @State private var dotPulsing = false
 
     var body: some View {
         VStack(spacing: 24) {
             // MARK: - Connection Status Badge
             statusBadge
+
+            // MARK: - Nickname (always visible)
+            nicknameSection
 
             // MARK: - Host / Browse Buttons
             if multipeerManager.connectionState == .notConnected ||
@@ -96,7 +99,7 @@ struct LobbyView: View {
             Spacer()
         }
         .padding(.top, 20)
-        .animatedEntrance()
+        .animatedEntrance(delay: 0.12)
         .navigationTitle("連線對戰")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $navigateToRoom) {
@@ -114,12 +117,12 @@ struct LobbyView: View {
             }
         }
         .onAppear {
-            // Reset state when re-entering lobby
-            if multipeerManager.connectionState == .disconnected {
-                multipeerManager.disconnect()
-            }
-            // Reset navigation flag when re-entering
+            multipeerManager.disconnect()
             navigateToRoom = false
+            if PlayerNameProvider.needsOnboarding && !isEditingNickname {
+                draftNickname = ""
+                isEditingNickname = true
+            }
         }
         .onDisappear {
             // If we haven't connected yet, clean up
@@ -129,17 +132,6 @@ struct LobbyView: View {
         }
         .hapticFeedback(.connect, trigger: multipeerManager.connectionState == .connected)
         .hapticFeedback(.disconnect, trigger: multipeerManager.transportError != nil)
-        .alert("設定暱稱", isPresented: $showNicknamePrompt) {
-            TextField("最多 12 字", text: $draftNickname)
-                .textInputAutocapitalization(.never)
-            Button("確定") {
-                let trimmed = String(draftNickname.prefix(12))
-                PlayerNameProvider.savedNickname = trimmed.isEmpty ? nil : trimmed
-            }
-            Button("使用匿名", role: .cancel) {}
-        } message: {
-            Text("此暱稱會顯示給對手看。")
-        }
         .alert(
             "藍牙連線問題",
             isPresented: Bindable(multipeerManager).hasTransportError
@@ -200,6 +192,59 @@ struct LobbyView: View {
         case .notConnected: return .gray
         case .disconnected: return .red
         }
+    }
+
+    // MARK: - Nickname Section
+
+    private var nicknameSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Label("你的暱稱", systemImage: "person.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: Spacing.s) {
+                if isEditingNickname {
+                    TextField("最多 12 字", text: $draftNickname)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .submitLabel(.done)
+                        .onSubmit { saveNickname() }
+                    Button("儲存") { saveNickname() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .tint(.blue)
+                    if !PlayerNameProvider.needsOnboarding {
+                        Button("取消") { isEditingNickname = false }
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                    }
+                } else {
+                    Text(PlayerNameProvider.broadcastName)
+                        .font(.body.bold())
+                    Spacer()
+                    Button {
+                        draftNickname = PlayerNameProvider.savedNickname ?? ""
+                        isEditingNickname = true
+                    } label: {
+                        Text("變更")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(PillButtonStyle(tint: .blue))
+                }
+            }
+            .animation(.spring(duration: 0.25), value: isEditingNickname)
+        }
+        .padding(Spacing.m)
+        .card(radius: Radius.m, elevation: .low, padding: 0)
+        .padding(.horizontal, Spacing.xl)
+    }
+
+    private func saveNickname() {
+        let trimmed = String(
+            draftNickname.trimmingCharacters(in: .whitespacesAndNewlines).prefix(12)
+        )
+        PlayerNameProvider.savedNickname = trimmed.isEmpty ? nil : trimmed
+        isEditingNickname = false
     }
 
     // MARK: - Action Buttons

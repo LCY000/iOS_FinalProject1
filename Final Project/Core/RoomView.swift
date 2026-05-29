@@ -36,29 +36,41 @@ struct RoomView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 24) {
-                connectedHeader
+            VStack(spacing: 0) {
+                // Inner ZStack: chat overlay is scoped here, never reaches the bottom bar
+                ZStack {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            connectedHeader
 
-                if multipeerManager.isHost {
-                    gameSelectionSection
+                            if multipeerManager.isHost {
+                                gameSelectionSection
 
-                    if let settingsEngine = settingsEngine {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("遊戲設定")
-                                .font(.headline)
-                                .padding(.horizontal, 24)
+                                if let settingsEngine = settingsEngine {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("遊戲設定")
+                                            .font(.headline)
+                                            .padding(.horizontal, 24)
 
-                            settingsEngine.makeSettingsView()
+                                        settingsEngine.makeSettingsView()
+                                    }
+                                }
+
+                                firstMoverSection
+                            } else {
+                                guestBrowsableSection
+                            }
                         }
+                        .padding(.bottom, Spacing.l)
                     }
+                    .scrollIndicators(.hidden)
 
-                    firstMoverSection
-                } else {
-                    waitingForHostSection
+                    if !session.gameStarted {
+                        ChatOverlayView(chatManager: session.chatManager)
+                    }
                 }
 
-                Spacer()
-
+                // Fixed bottom bar — always visible, never overlaid by chat
                 if multipeerManager.isHost {
                     Button {
                         let game = availableGames[selectedGameIndex]
@@ -69,10 +81,15 @@ struct RoomView: View {
                     }
                     .buttonStyle(PrimaryActionButtonStyle(tint: .green))
                     .padding(.horizontal, Spacing.xl)
-                    .padding(.bottom, Spacing.l)
+                    .padding(.vertical, Spacing.m)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemBackground))
+                } else {
+                    // Reserve height for the chat capsule so it never overlaps scroll content
+                    Color.clear.frame(height: 52)
                 }
             }
-            .animatedEntrance()
+            .animatedEntrance(delay: 0.12)
             .navigationTitle("遊戲房間")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
@@ -126,13 +143,6 @@ struct RoomView: View {
                 }
             }
 
-            // Chat is available in the room too. When a game is active the
-            // navigationDestination pushes a separate overlay so only one is
-            // ever visible; the centralized toast state in ChatManager keeps
-            // them in sync.
-            if !session.gameStarted {
-                ChatOverlayView(chatManager: session.chatManager)
-            }
         }
         .onAppear {
             session.attachHandlers()
@@ -340,17 +350,56 @@ struct RoomView: View {
         }
     }
 
-    // MARK: - Guest Waiting
+    // MARK: - Guest Browsable Section
 
-    private var waitingForHostSection: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .scaleEffect(1.2)
-            Text("等待房主選擇遊戲並開始…")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+    private var guestBrowsableSection: some View {
+        VStack(spacing: Spacing.l) {
+            HStack(spacing: Spacing.s) {
+                ProgressView()
+                Text("等待房主選擇遊戲並開始…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, Spacing.m)
+
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                Text("遊戲介紹")
+                    .font(.headline)
+                    .padding(.horizontal, Spacing.l)
+
+                ForEach(availableGames) { game in
+                    guestGameCard(game)
+                }
+            }
         }
-        .padding(.top, 40)
+    }
+
+    private func guestGameCard(_ game: GameInfo) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: game.icon)
+                    .font(.title3)
+                    .foregroundStyle(gameColor(for: game))
+                    .frame(width: 28)
+                Text(game.title)
+                    .font(.headline)
+                Spacer()
+                Button {
+                    tutorialGame = game
+                } label: {
+                    Label("規則 / 教學", systemImage: "book.fill")
+                        .font(.caption.bold())
+                }
+                .buttonStyle(PillButtonStyle(tint: .blue))
+            }
+            Text(game.tutorial.overview)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding(Spacing.m)
+        .card(radius: Radius.m, elevation: .low, padding: 0)
+        .padding(.horizontal, Spacing.l)
     }
 
     // MARK: - First Mover

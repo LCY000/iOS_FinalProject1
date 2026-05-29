@@ -13,8 +13,8 @@ struct CheckersMoveInfo: Equatable {
     let path: [CheckersPosition]      // [start, land1, land2, ..., final]
     let captures: [CheckersPosition]  // captures[i] eaten between path[i] and path[i+1]
     let promoted: Bool
-    var from: CheckersPosition { path.first! }
-    var to: CheckersPosition { path.last! }
+    var from: CheckersPosition { path.first ?? CheckersPosition(row: 0, col: 0) }
+    var to: CheckersPosition { path.last  ?? CheckersPosition(row: 0, col: 0) }
 }
 
 // MARK: - Engine
@@ -40,6 +40,12 @@ final class CheckersEngine: GameEngine {
 
     private func refreshValidMoves() {
         currentValidMoves = model.validMoves(for: model.currentPlayer)
+        // Auto-select the single forced-capture piece so destinations show immediately
+        guard selectedFrom == nil else { return }
+        guard !isMultiplayer || currentPlayer == localPlayer else { return }
+        guard currentValidMoves.contains(where: { !$0.captures.isEmpty }) else { return }
+        let sources = Set(currentValidMoves.map(\.from))
+        if sources.count == 1 { selectedFrom = sources.first }
     }
 
     // MARK: - GameEngine State
@@ -119,7 +125,8 @@ final class CheckersEngine: GameEngine {
         lastMoveInfo = CheckersMoveInfo(path: path, captures: captures, promoted: promoted)
         selectedFrom = nil
         refreshValidMoves()
-        SoundManager.shared.play(.placePiece)
+        // .promote is played by the canvas after animation; only play move sound here
+        SoundManager.shared.play(captures.isEmpty ? .placePiece : .capture)
     }
 
     // MARK: - Remote Move
@@ -132,7 +139,7 @@ final class CheckersEngine: GameEngine {
         lastMoveInfo = CheckersMoveInfo(path: payload.path, captures: payload.captures, promoted: promoted)
         selectedFrom = nil
         refreshValidMoves()
-        SoundManager.shared.play(.opponentMove)
+        SoundManager.shared.play(payload.captures.isEmpty ? .opponentMove : .capture)
     }
 
     // MARK: - Reset
@@ -176,6 +183,12 @@ final class CheckersEngine: GameEngine {
     var validDestinations: [CheckersPosition] {
         guard let from = selectedFrom else { return [] }
         return currentValidMoves.filter { $0.from == from }.map(\.to)
+    }
+
+    // Pieces that MUST capture this turn (empty when no forced capture)
+    var forcedCaptureSources: [CheckersPosition] {
+        guard currentValidMoves.contains(where: { !$0.captures.isEmpty }) else { return [] }
+        return Array(Set(currentValidMoves.map(\.from)))
     }
 }
 

@@ -28,20 +28,24 @@ struct ChatOverlayView: View {
                     showChatSheet = true
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "bubble.left.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.blue)
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 6, height: 6)
                         Text(msg)
                             .font(.caption)
                             .lineLimit(1)
                             .foregroundStyle(.primary)
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(.ultraThinMaterial)
-                            .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+                            .fill(.regularMaterial)
+                            .overlay {
+                                Capsule()
+                                    .stroke(Color.blue.opacity(0.25), lineWidth: 1)
+                            }
+                            .shadow(color: .black.opacity(0.10), radius: 8, y: 3)
                     )
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
